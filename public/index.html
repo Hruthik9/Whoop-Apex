@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WHOOP • Professional Health & Hypertrophy Dashboard</title>
+  <meta name="description" content="Personalized WHOOP biometrics, habit correlation engine, and muscle mass hypertrophy lab.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="dashboard-shell">
+    <!-- Shell Header with Brand, Segmented Pill Navigation, and Action Controls -->
+    <header class="shell-header">
+      <div class="shell-brand">
+        <div class="brand-text-logo">WHOOP<span>.io</span></div>
+      </div>
+
+      <!-- Segmented Pill Navigation Bar (Resq.io Style) -->
+      <nav class="segmented-pill-nav" aria-label="Dashboard Views">
+        <button class="nav-tab-pill active" data-tab="overview" id="tab-btn-overview">
+          <span>Overview</span>
+        </button>
+        <button class="nav-tab-pill" data-tab="recovery" id="tab-btn-recovery">
+          <span>Recovery</span>
+        </button>
+        <button class="nav-tab-pill" data-tab="sleep" id="tab-btn-sleep">
+          <span>Sleep</span>
+        </button>
+        <button class="nav-tab-pill" data-tab="workouts" id="tab-btn-workouts">
+          <span>Strain</span>
+        </button>
+        <button class="nav-tab-pill" data-tab="habits" id="tab-btn-habits">
+          <span>Habits</span>
+        </button>
+        <button class="nav-tab-pill" data-tab="hypertrophy" id="tab-btn-hypertrophy">
+          <span>Hypertrophy</span>
+        </button>
+      </nav>
+
+      <!-- Shell Right Controls -->
+      <div class="shell-actions">
+        <div class="date-picker-wrapper">
+          <label for="date-selector" class="sr-only">Select Date</label>
+          <input type="date" id="date-selector" class="date-input" aria-label="Select Date">
+        </div>
+
+        <div id="connection-status-pill" class="status-pill status-disconnected">
+          <span class="status-dot"></span>
+          <span id="connection-status-text">Disconnected</span>
+        </div>
+
+        <button id="btn-sync" class="action-circle-btn" title="Sync latest data from WHOOP API">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        </button>
+        <button id="btn-connect" class="btn btn-primary" title="Connect to WHOOP Developer API" style="padding: 6px 14px; font-size: 12px;">
+          <span>Connect</span>
+        </button>
+        <button id="btn-demo" class="action-circle-btn" title="Load sample 30-day realistic biometric data">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        </button>
+        <div class="user-avatar-circle" title="Hruthik">H</div>
+      </div>
+    </header>
+
+    <!-- Notification Banner -->
+    <div id="alert-banner" class="alert-banner hidden">
+      <span id="alert-message"></span>
+      <button id="btn-dismiss-alert" class="btn-icon" aria-label="Dismiss alert">&times;</button>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 1: COMMAND CENTER (OVERVIEW) -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane active" id="pane-overview">
+      <!-- Hero Welcome Row & Micro-Trend Metrics -->
+      <section class="hero-welcome-row">
+        <div class="welcome-text-group">
+          <h2 class="welcome-title">Welcome back, <span>Hruthik</span></h2>
+          <div class="status-capsules-bar">
+            <div class="capsule-item capsule-rose" id="cap-recovery">Recovery: <strong id="cap-rec-val">32%</strong></div>
+            <div class="capsule-item capsule-white" id="cap-sleep">Sleep: <strong id="cap-sleep-val">37%</strong></div>
+            <div class="capsule-item capsule-dark" id="cap-strain">Day Strain: <strong id="cap-strain-val">4.2</strong></div>
+            <div class="capsule-item capsule-striped" id="cap-hrv">HRV: <strong id="cap-hrv-val">58ms</strong></div>
+          </div>
+        </div>
+
+        <!-- Top-Right Micro-Trend Stats -->
+        <div class="top-trend-stats">
+          <div class="trend-stat-unit">
+            <div class="trend-stat-header">
+              <span class="trend-chip trend-chip-green">↗ +8%</span>
+              <span class="trend-stat-val" id="top-stat-hrv">58</span>
+            </div>
+            <span class="trend-stat-sub">HRV Baseline (7d)</span>
+          </div>
+          <div class="trend-stat-unit">
+            <div class="trend-stat-header">
+              <span class="trend-chip trend-chip-green">↘ -4%</span>
+              <span class="trend-stat-val" id="top-stat-rhr">65</span>
+            </div>
+            <span class="trend-stat-sub">Resting Heart Rate</span>
+          </div>
+          <div class="trend-stat-unit">
+            <div class="trend-stat-header">
+              <span class="trend-chip trend-chip-red">37%</span>
+              <span class="trend-stat-val" id="top-stat-sleep">3h 46m</span>
+            </div>
+            <span class="trend-stat-sub">Sleep Duration</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Reference Layout Row 1: Summary Box + Spline Chart + Vibrant Blue Feature Card -->
+      <section class="reference-grid-row-1" style="margin-top: 24px;">
+        <!-- Left: Summary Box Card -->
+        <div class="summary-box-card">
+          <div class="card-header" style="margin-bottom: 0;">
+            <span class="card-tag">READINESS SUMMARY</span>
+            <span class="badge badge-yellow" id="summary-badge-tier">MODERATE</span>
+          </div>
+          <div class="summary-items-list">
+            <div class="summary-row-item">
+              <div class="summary-dot-group">
+                <span class="summary-dot dot-rose"></span>
+                <span>Autonomic Recovery</span>
+              </div>
+              <span class="summary-count" id="sum-rec-score">32%</span>
+            </div>
+            <div class="summary-row-item">
+              <div class="summary-dot-group">
+                <span class="summary-dot dot-green"></span>
+                <span>Cardiovascular Ceiling</span>
+              </div>
+              <span class="summary-count" id="sum-vo2-score">44.7</span>
+            </div>
+            <div class="summary-row-item">
+              <div class="summary-dot-group">
+                <span class="summary-dot dot-yellow"></span>
+                <span>Sleep Need Debt</span>
+              </div>
+              <span class="summary-count" id="sum-debt-score">49 min</span>
+            </div>
+            <div class="summary-row-item">
+              <div class="summary-dot-group">
+                <span class="summary-dot dot-blue"></span>
+                <span>Maintenance TDEE</span>
+              </div>
+              <span class="summary-count" id="sum-tdee-score">2,418</span>
+            </div>
+          </div>
+          <div class="summary-card-footer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <span id="sum-footer-text">Elevated sympathetic stress today. Prioritize early sleep and Zone 2 recovery.</span>
+          </div>
+        </div>
+
+        <!-- Center: Spline Waveform Chart Card -->
+        <div class="spline-chart-card">
+          <div class="card-header" style="margin-bottom: 0;">
+            <div>
+              <span class="card-tag">BIOMETRIC FREQUENCY</span>
+              <h3 style="font-family: var(--font-display); font-size: 16px; margin-top: 4px; color: #FFFFFF;">Strain & Recovery Readiness</h3>
+            </div>
+            <div class="time-range-pill">
+              <button class="time-pill-btn">12 months</button>
+              <button class="time-pill-btn active">30 days</button>
+              <button class="time-pill-btn">1 week</button>
+            </div>
+          </div>
+          <div class="chart-wrapper" style="height: 250px;">
+            <canvas id="overview-trend-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Right: Vibrant Electric Cobalt Card -->
+        <div class="feature-card-vibrant">
+          <div class="feature-card-header">
+            <span class="feature-card-title">Daily Protocol</span>
+            <div class="feature-circle-arrow" id="btn-goto-protocol-card" title="View Full Recommendations">↗</div>
+          </div>
+          <p class="feature-card-desc" id="feature-card-advice">Your recovery is restricted at 32%. Push cardiovascular active recovery rather than high-tension heavy lifting today.</p>
+          <div class="feature-stacked-cards">
+            <div class="feature-stacked-item">
+              <span>Target Strain</span>
+              <span class="feature-badge-count" id="feat-target-strain">11.4</span>
+            </div>
+            <div class="feature-stacked-item">
+              <span>Primary Focus</span>
+              <span style="font-weight: 700; color: #306EE8;" id="feat-focus-label">Zone 2 Aerobic</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Reference Layout Row 2: Active Habits + Bubble Statistics + AI Assistant -->
+      <section class="reference-grid-row-2" style="margin-top: 24px;">
+        <!-- Left: Active Tracking & Habits Card -->
+        <div class="active-habits-card">
+          <div class="card-header" style="margin-bottom: 0;">
+            <div>
+              <span class="card-tag">ACTIVE TRACKING</span>
+              <h3 style="font-family: var(--font-display); font-size: 16px; margin-top: 4px; color: #FFFFFF;">Daily Habits & Protocols</h3>
+            </div>
+            <button id="btn-add-habit" class="btn btn-outline">+ Add Habit</button>
+          </div>
+          <div class="habits-feed-grid" id="habits-grid"></div>
+        </div>
+
+        <!-- Center: Bubble Statistics Card -->
+        <div class="bubble-stats-card">
+          <div class="card-header" style="margin-bottom: 0;">
+            <div>
+              <span class="card-tag">STATISTICS</span>
+              <h3 style="font-family: var(--font-display); font-size: 16px; margin-top: 4px; color: #FFFFFF;">Sleep Architecture</h3>
+            </div>
+            <div class="feature-circle-arrow" id="btn-goto-sleep-card" title="View Sleep Lab">↗</div>
+          </div>
+          <div class="bubble-viz-container">
+            <div class="bubble-circle bubble-circle-rose" title="Slow Wave Sleep">
+              <span class="bubble-val" id="bubble-sws-pct">37%</span>
+              <span class="bubble-label">Deep SWS</span>
+            </div>
+            <div class="bubble-circle bubble-circle-blue" title="REM Sleep">
+              <span class="bubble-val" id="bubble-rem-pct">20%</span>
+              <span class="bubble-label">REM Sleep</span>
+            </div>
+            <div class="bubble-circle bubble-circle-striped" title="Light Sleep">
+              <span class="bubble-val" id="bubble-light-pct">43%</span>
+              <span class="bubble-label">Light Sleep</span>
+            </div>
+          </div>
+          <div class="bubble-stage-breakdown">
+            <div class="bubble-breakdown-chip">
+              <span class="summary-dot dot-rose"></span>
+              <span>Deep: <strong id="bubble-sws-time">84m</strong></span>
+            </div>
+            <div class="bubble-breakdown-chip">
+              <span class="summary-dot dot-blue"></span>
+              <span>REM: <strong id="bubble-rem-time">43m</strong></span>
+            </div>
+            <div class="bubble-breakdown-chip">
+              <span class="summary-dot dot-gray"></span>
+              <span>Light: <strong id="bubble-light-time">98m</strong></span>
+            </div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); text-align: center;">
+            Deep SWS triggers 85% of nocturnal Human Growth Hormone
+          </div>
+        </div>
+
+        <!-- Right: Additional Cards Stack (Replaces Performance Coach) -->
+        <div class="additional-cards-stack">
+          <!-- Additional Card 1: VO2 Max & Aerobic Capacity -->
+          <div class="card-vo2-glance">
+            <div class="card-header" style="margin-bottom: 0;">
+              <div>
+                <span class="card-tag">AEROBIC CEILING</span>
+                <h3 style="font-family: var(--font-display); font-size: 15px; margin-top: 2px; color: #FFFFFF;">VO₂ Max & Capacity</h3>
+              </div>
+              <div class="feature-circle-arrow" id="btn-goto-vo2-card" title="Open VO2 Max Lab">↗</div>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between;">
+              <div>
+                <span class="vo2-glance-number" id="glance-vo2-val">44.7</span>
+                <small style="font-size: 12px; color: var(--text-muted); margin-left: 4px;">mL/kg/min</small>
+              </div>
+              <span class="badge badge-blue" id="glance-vo2-badge">Top 30% • 24 yrs</span>
+            </div>
+            <div class="glance-protocols-row">
+              <div class="glance-chip">
+                <strong style="color: #306EE8;">4x4:</strong> 4x4m @ 171-181 bpm
+              </div>
+              <div class="glance-chip">
+                <strong style="color: #00F076;">Zone 2:</strong> 45-60m @ 114-133 bpm
+              </div>
+            </div>
+          </div>
+
+          <!-- Additional Card 2: Metabolic Flux & Energy Expenditure -->
+          <div class="card-metabolic-glance">
+            <div class="card-header" style="margin-bottom: 0;">
+              <div>
+                <span class="card-tag">METABOLIC ENGINE</span>
+                <h3 style="font-family: var(--font-display); font-size: 15px; margin-top: 2px; color: #FFFFFF;">Energy Expenditure & Flux</h3>
+              </div>
+              <div class="feature-circle-arrow" id="btn-goto-hyp-card" title="Open Hypertrophy Lab">↗</div>
+            </div>
+            <div class="glance-metabolic-grid">
+              <div class="glance-meta-item">
+                <span class="glance-meta-label">BMR</span>
+                <strong class="glance-meta-val" id="glance-bmr-val">1,727 <small>kcal</small></strong>
+              </div>
+              <div class="glance-meta-item">
+                <span class="glance-meta-label">Active Burn</span>
+                <strong class="glance-meta-val" id="glance-active-val">593 <small>kcal</small></strong>
+              </div>
+              <div class="glance-meta-item">
+                <span class="glance-meta-label">TDEE</span>
+                <strong class="glance-meta-val" id="glance-tdee-val">2,418 <small>kcal</small></strong>
+              </div>
+            </div>
+            <div class="glance-target-box">
+              <div style="display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 4px;">
+                <span style="color: var(--text-secondary);" id="glance-goal-label">Surplus Target (+350 kcal)</span>
+                <strong style="color: #306EE8;" id="glance-goal-cals">2,768 kcal</strong>
+              </div>
+              <div class="progress-bar-bg" style="height: 5px;">
+                <div class="progress-bar-fill" id="glance-goal-progress" style="width: 78%; background: linear-gradient(90deg, #306EE8, #60A5FA);"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 2: RECOVERY & HRV LAB -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="pane-recovery">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">RECOVERY & AUTONOMIC NERVOUS SYSTEM (HRV) LAB</h2>
+          <p class="section-desc">Heart Rate Variability (rMSSD), Parasympathetic tone, and Resting Heart Rate trends</p>
+        </div>
+      </div>
+
+      <!-- Recovery Lab Stat Chips -->
+      <div class="stat-chips-grid">
+        <div class="stat-chip">
+          <span class="stat-chip-label">7-Day Rolling HRV</span>
+          <span class="stat-chip-val" id="hrv-7d-avg">-- ms</span>
+          <span class="stat-chip-sub">Baseline normal band</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">30-Day Rolling RHR</span>
+          <span class="stat-chip-val" id="rhr-30d-avg">-- bpm</span>
+          <span class="stat-chip-sub">Cardiovascular efficiency</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Green Day Ratio</span>
+          <span class="stat-chip-val highlight-green" id="green-day-ratio">--%</span>
+          <span class="stat-chip-sub">Optimal readiness frequency</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Blood Oxygen (SpO₂)</span>
+          <span class="stat-chip-val" id="spo2-avg">--%</span>
+          <span class="stat-chip-sub">Nocturnal respiratory saturation</span>
+        </div>
+      </div>
+
+      <!-- HRV Rolling Baseline Chart -->
+      <div class="charts-grid" style="margin-top: 24px;">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>HRV (rMSSD) Trend vs 7-Day Baseline</h3>
+            <span class="chart-legend-indicator">Green: Optimal | Blue: Baseline</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="recovery-hrv-deep-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Resting Heart Rate (RHR) Stability</h3>
+            <span class="chart-legend-indicator">Lower RHR indicates enhanced cardiovascular recovery</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="rhr-trend-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recovery Breakdown Matrix -->
+      <div class="card-glass" style="margin-top: 24px; padding: 24px;">
+        <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 12px;">Autonomic Recovery Tier Distribution</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px;">Breakdown of your recovery readiness across all recorded days in your WHOOP history.</p>
+        <div class="tier-bar-wrapper">
+          <div class="tier-segment segment-green" id="tier-bar-green" style="width: 33%;">Green (<span id="count-green">0</span>)</div>
+          <div class="tier-segment segment-yellow" id="tier-bar-yellow" style="width: 33%;">Yellow (<span id="count-yellow">0</span>)</div>
+          <div class="tier-segment segment-red" id="tier-bar-red" style="width: 34%;">Red (<span id="count-red">0</span>)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 3: SLEEP ARCHITECTURE -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="pane-sleep">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">SLEEP ARCHITECTURE & CIRCADIAN ANALYSIS</h2>
+          <p class="section-desc">Slow Wave Sleep (Deep), REM, Sleep Debt, and Sleep Need Breakdown</p>
+        </div>
+      </div>
+
+      <!-- Sleep Metrics Grid -->
+      <div class="stat-chips-grid">
+        <div class="stat-chip">
+          <span class="stat-chip-label">Total Time Asleep</span>
+          <span class="stat-chip-val highlight-cyan" id="sleep-exact-time">--</span>
+          <span class="stat-chip-sub">Exact calculated duration</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Sleep Debt</span>
+          <span class="stat-chip-val highlight-red" id="sleep-debt-val">-- min</span>
+          <span class="stat-chip-sub">Accumulated deficit</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Deep Sleep (SWS)</span>
+          <span class="stat-chip-val highlight-cyan" id="sleep-sws-exact">-- min</span>
+          <span class="stat-chip-sub">Physical restoration & HGH release</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Sleep Efficiency</span>
+          <span class="stat-chip-val highlight-purple" id="sleep-eff-exact">--%</span>
+          <span class="stat-chip-sub">Time asleep / Time in bed</span>
+        </div>
+      </div>
+
+      <!-- Sleep Architecture Breakdown Charts -->
+      <div class="charts-grid" style="margin-top: 24px;">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Sleep Stages Breakdown (Minutes)</h3>
+            <span class="chart-legend-indicator">Deep (SWS), REM, Light, Awake</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="sleep-stages-deep-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Sleep Need vs. Actual Sleep (Hours)</h3>
+            <span class="chart-legend-indicator">Tracks sleep debt accumulated vs sleep achieved</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="sleep-need-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sleep Science Guide Card -->
+      <div class="card-glass" style="margin-top: 24px; padding: 24px;">
+        <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 10px; color: var(--whoop-cyan);">Sleep Architecture Standards for Human Performance</h3>
+        <div class="sleep-standards-grid">
+          <div class="standard-item">
+            <h4>Slow Wave Sleep (Deep / SWS)</h4>
+            <p><strong>Optimal: 20-25% of sleep (~1.5 - 2h).</strong> Triggers 85% of Human Growth Hormone (HGH), cellular repair, and muscle protein synthesis.</p>
+          </div>
+          <div class="standard-item">
+            <h4>REM Sleep (Rapid Eye Movement)</h4>
+            <p><strong>Optimal: 20-25% of sleep (~1.5 - 2h).</strong> Cognitive consolidation, emotional regulation, motor learning, and memory retention.</p>
+          </div>
+          <div class="standard-item">
+            <h4>Light Sleep</h4>
+            <p><strong>Optimal: 50-55% of sleep.</strong> Transition state aiding mental recovery and metabolism stabilization.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 4: STRAIN & WORKOUTS -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="pane-workouts">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">STRAIN & WORKOUT ANALYTICS</h2>
+          <p class="section-desc">Cardiovascular load, heart rate zones, and energy expenditure</p>
+        </div>
+      </div>
+
+      <div class="stat-chips-grid">
+        <div class="stat-chip">
+          <span class="stat-chip-label">Today's Day Strain</span>
+          <span class="stat-chip-val highlight-blue" id="strain-exact-val">--</span>
+          <span class="stat-chip-sub">0 - 21 logarithmic scale</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Energy Expenditure</span>
+          <span class="stat-chip-val" id="energy-kcal-val">-- kcal</span>
+          <span class="stat-chip-sub" id="energy-kj-sub">-- kJ burned</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Max Heart Rate</span>
+          <span class="stat-chip-val" id="max-hr-exact">-- bpm</span>
+          <span class="stat-chip-sub">Peak cardiovascular output</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Recorded Workouts</span>
+          <span class="stat-chip-val" id="total-workouts-val">0</span>
+          <span class="stat-chip-sub">Specific activity sessions</span>
+        </div>
+      </div>
+
+      <!-- Strain vs Recovery Chart -->
+      <div class="charts-grid" style="margin-top: 24px;">
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Day Strain vs. Recovery Readiness</h3>
+            <span class="chart-legend-indicator">Blue: Strain | Green: Recovery %</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="strain-recovery-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Daily Energy Burned (Calories / kcal)</h3>
+            <span class="chart-legend-indicator">WHOOP Total Energy Expenditure</span>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="calories-burned-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workouts List Container -->
+      <div class="card-glass" style="margin-top: 24px; padding: 24px;">
+        <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 12px;">Workout Activity Sessions</h3>
+        <div id="workouts-list-container">
+          <p style="color: var(--text-muted); font-size: 13px;">No workouts recorded for this date.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 5: HABIT CORRELATION & SCIENCE MATRIX -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="pane-habits">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">HABIT CORRELATION & STATISTICAL IMPACT MATRIX</h2>
+          <p class="section-desc">Empirical difference in Recovery, HRV, and Deep Sleep when habits are active vs inactive</p>
+        </div>
+        <div>
+          <button class="btn btn-outline" id="btn-add-habit-tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Add Custom Habit</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Insights Cards Grid -->
+      <div class="insights-cards-grid" id="insights-cards-container-tab"></div>
+
+      <!-- Full Impact Table -->
+      <div class="table-container">
+        <table class="impact-table">
+          <thead>
+            <tr>
+              <th scope="col">Habit</th>
+              <th scope="col">Category</th>
+              <th scope="col">Recovery Impact</th>
+              <th scope="col">HRV Impact</th>
+              <th scope="col">Deep Sleep (SWS)</th>
+              <th scope="col">Resting HR</th>
+              <th scope="col">Confidence</th>
+              <th scope="col">Overall Impact</th>
+            </tr>
+          </thead>
+          <tbody id="impact-table-body-tab"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- TAB 6: MUSCLE MASS & HYPERTROPHY LAB -->
+    <!-- ========================================================================= -->
+    <div class="tab-pane" id="pane-hypertrophy">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">BODY COMPOSITION, METABOLISM & VO2 LAB</h2>
+          <p class="section-desc">Personalized Nutrition, Fat Loss, VO2 Max & Hypertrophy Protocols • Hruthik (78.5 kg, 1.70 m)</p>
+        </div>
+      </div>
+
+      <!-- Goal Switcher Toggle: Muscle Gain vs Fat Loss -->
+      <div class="goal-switcher-container">
+        <div class="goal-switcher-pill">
+          <button id="btn-goal-gain" class="goal-btn active" data-goal="gain">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            <span>Muscle Gain (Lean Bulk)</span>
+          </button>
+          <button id="btn-goal-loss" class="goal-btn" data-goal="loss">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>
+            <span>Fat Loss (Cut & Shred)</span>
+          </button>
+        </div>
+        <div class="goal-summary-badge" id="goal-summary-badge">
+          Target: +350 kcal Surplus • Maximizing Muscle Protein Synthesis
+        </div>
+      </div>
+
+      <!-- User Body Composition Hero Banner -->
+      <div class="hypertrophy-hero-card">
+        <div class="body-stat-box">
+          <span class="body-stat-title">Bodyweight</span>
+          <span class="body-stat-number" id="hyp-body-weight">78.5 <small>kg</small></span>
+          <span class="body-stat-sub">173.1 lbs</span>
+        </div>
+        <div class="body-stat-box">
+          <span class="body-stat-title">Height</span>
+          <span class="body-stat-number" id="hyp-body-height">1.70 <small>m</small></span>
+          <span class="body-stat-sub">5 ft 7 in</span>
+        </div>
+        <div class="body-stat-box">
+          <span class="body-stat-title">Max Heart Rate</span>
+          <span class="body-stat-number" id="hyp-body-maxhr">190 <small>bpm</small></span>
+          <span class="body-stat-sub">Cardio Ceiling</span>
+        </div>
+        <div class="body-stat-box highlight-box">
+          <span class="body-stat-title">Readiness Assessment</span>
+          <span class="body-stat-number" id="hyp-readiness-tier">--</span>
+          <span class="body-stat-sub" id="hyp-readiness-desc">--</span>
+        </div>
+      </div>
+
+      <!-- Targets Grid: Calories, Protein, Carbs, Fats -->
+      <div class="macro-cards-grid">
+        <!-- Target Calories Card -->
+        <div class="macro-card macro-calories">
+          <div class="macro-header">
+            <span class="macro-tag">CALORIE TARGET</span>
+            <span class="macro-badge badge-blue">+350 kcal Lean Bulk Surplus</span>
+          </div>
+          <div class="macro-value-group">
+            <span class="macro-number" id="hyp-target-calories">--</span>
+            <span class="macro-unit">kcal / day</span>
+          </div>
+          <div class="macro-progress-bar-bg">
+            <div class="macro-progress-bar-fill fill-blue" id="bar-calories" style="width: 0%;"></div>
+          </div>
+          <div class="macro-footer">
+            <span>Burned: <strong id="hyp-burned-calories">--</strong> kcal</span>
+            <span>Surplus Goal: <strong>+350</strong> kcal</span>
+          </div>
+        </div>
+
+        <!-- Target Protein Card -->
+        <div class="macro-card macro-protein">
+          <div class="macro-header">
+            <span class="macro-tag">PROTEIN TARGET</span>
+            <span class="macro-badge badge-green">2.1 g/kg (Optimal MPS)</span>
+          </div>
+          <div class="macro-value-group">
+            <span class="macro-number highlight-green" id="hyp-target-protein">165</span>
+            <span class="macro-unit">grams / day</span>
+          </div>
+          <div class="macro-progress-bar-bg">
+            <div class="macro-progress-bar-fill fill-green" id="bar-protein" style="width: 0%;"></div>
+          </div>
+          <div class="macro-footer">
+            <span>Per Meal: <strong>~41g</strong> (4 meals)</span>
+            <span>Leucine Trigger: <strong>&ge; 3.2g</strong></span>
+          </div>
+        </div>
+
+        <!-- Target Carbohydrates Card -->
+        <div class="macro-card macro-carbs">
+          <div class="macro-header">
+            <span class="macro-tag">CARBOHYDRATES</span>
+            <span class="macro-badge badge-yellow">Glycogen Replenishment</span>
+          </div>
+          <div class="macro-value-group">
+            <span class="macro-number highlight-yellow" id="hyp-target-carbs">--</span>
+            <span class="macro-unit">grams / day</span>
+          </div>
+          <div class="macro-progress-bar-bg">
+            <div class="macro-progress-bar-fill fill-yellow" id="bar-carbs" style="width: 0%;"></div>
+          </div>
+          <div class="macro-footer">
+            <span>Fuel for high-tension training</span>
+            <span>Anti-catabolic insulin spike</span>
+          </div>
+        </div>
+
+        <!-- Target Fats Card -->
+        <div class="macro-card macro-fats">
+          <div class="macro-header">
+            <span class="macro-tag">HEALTHY FATS</span>
+            <span class="macro-badge badge-purple">1.0 g/kg (Hormone Support)</span>
+          </div>
+          <div class="macro-value-group">
+            <span class="macro-number highlight-purple" id="hyp-target-fats">78</span>
+            <span class="macro-unit">grams / day</span>
+          </div>
+          <div class="macro-progress-bar-bg">
+            <div class="macro-progress-bar-fill fill-purple" id="bar-fats" style="width: 0%;"></div>
+          </div>
+          <div class="macro-footer">
+            <span>Testosterone & steroidogenesis</span>
+            <span>Omega-3 anti-inflammatory</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timeline Projections: Muscle Gain & Fat Loss Rates (%) -->
+      <div class="projections-container-card" id="projections-container-card" style="margin-top: 24px;">
+        <div class="projections-header">
+          <div>
+            <div class="projections-tag-badge" id="proj-badge">TIMELINE PROJECTIONS</div>
+            <h3 class="projections-title" id="proj-title">Hypertrophy Velocity & Timeline Projections</h3>
+            <p class="projections-sub" id="proj-subtitle">Scientifically modeled for Hruthik (78.5 kg) based on physiological rate models</p>
+          </div>
+          <div class="projections-rate-chip" id="proj-rate-chip">
+            <span id="proj-rate-label">Monthly Rate:</span>
+            <strong id="proj-rate-val">+1.2% Muscle Gain / Month</strong>
+          </div>
+        </div>
+
+        <!-- 4 Milestone Columns Grid -->
+        <div class="projections-milestones-grid" id="proj-milestones-grid">
+          <!-- Dynamically populated by app.js -->
+        </div>
+
+        <!-- Projections Summary Footer Chips -->
+        <div class="projections-summary-bar" id="proj-summary-bar">
+          <!-- Dynamically populated by app.js -->
+        </div>
+      </div>
+
+      <!-- VO2 Max & Metabolic Efficiency Section Grid -->
+      <div class="charts-grid" style="margin-top: 24px;">
+        <!-- VO2 Max Card -->
+        <div class="card-glass" style="padding: 24px;">
+          <div class="chart-header">
+            <h3 style="color: var(--whoop-cyan);">VO₂ Max & Cardiovascular Ceiling</h3>
+            <span class="badge badge-cyan" id="vo2-percentile-badge">Top 30% / Good</span>
+          </div>
+          <div class="vo2-dial-layout">
+            <div class="vo2-dial-display">
+              <span class="vo2-number" id="vo2-max-val">44.7</span>
+              <span class="vo2-unit">mL / kg / min</span>
+            </div>
+            <div class="vo2-meta">
+              <div><strong>Fitness Age:</strong> <span id="vo2-fitness-age">24 yrs</span></div>
+              <div><strong>Athletic Target:</strong> <span>50.0+ mL/kg/min</span></div>
+              <div><strong>Formula:</strong> <span>15.3 &times; (HRmax / HRrest)</span></div>
+            </div>
+          </div>
+          <div class="vo2-protocols-list" id="vo2-protocols-container">
+            <!-- Dynamic protocols injected by JS -->
+          </div>
+        </div>
+
+        <!-- Metabolic Efficiency Lab Card -->
+        <div class="card-glass" style="padding: 24px;">
+          <div class="chart-header">
+            <h3 style="color: var(--whoop-yellow);">Metabolic Efficiency & TDEE Lab</h3>
+            <span class="badge badge-yellow" id="meta-flex-badge">Flexibility: Moderate</span>
+          </div>
+          <div class="metabolic-stats-grid">
+            <div class="meta-stat-item">
+              <span class="meta-stat-label">Basal Metabolic Rate (BMR)</span>
+              <span class="meta-stat-val" id="meta-bmr-val">1,730 <small>kcal</small></span>
+              <span class="meta-stat-sub">Resting cellular expenditure</span>
+            </div>
+            <div class="meta-stat-item">
+              <span class="meta-stat-label">Thermic Effect of Food (TEF)</span>
+              <span class="meta-stat-val highlight-green" id="meta-tef-val">~210 <small>kcal</small></span>
+              <span class="meta-stat-sub">Burned digesting protein & carbs</span>
+            </div>
+            <div class="meta-stat-item">
+              <span class="meta-stat-label">Total Daily Energy (TDEE)</span>
+              <span class="meta-stat-val highlight-yellow" id="meta-tdee-val">2,420 <small>kcal</small></span>
+              <span class="meta-stat-sub">Baseline maintenance energy</span>
+            </div>
+            <div class="meta-stat-item">
+              <span class="meta-stat-label">Active Burn (Today)</span>
+              <span class="meta-stat-val highlight-blue" id="meta-active-val">580 <small>kcal</small></span>
+              <span class="meta-stat-sub">WHOOP recorded strain</span>
+            </div>
+          </div>
+          <div class="meta-advice-box" id="meta-advice-text" style="margin-top: 16px;">
+            <!-- Advice injected by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Muscle Protein Synthesis (MPS) Meal Timeline -->
+      <div class="card-glass" style="margin-top: 24px; padding: 24px;">
+        <h3 style="font-family: var(--font-display); font-size: 18px; margin-bottom: 6px; color: var(--whoop-green);">Optimal Muscle Protein Synthesis (MPS) Protocol</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px;">To maximize muscle growth at 78.5 kg, protein must be distributed across 4 feeding windows to repeatedly trigger the mTOR pathway via the 3g Leucine threshold.</p>
+        
+        <div class="mps-timeline-grid" id="mps-timeline-container"></div>
+      </div>
+
+      <!-- Sleep & Growth Hormone (HGH) Science Section -->
+      <div class="card-glass" style="margin-top: 24px; padding: 24px; border-left: 4px solid var(--whoop-cyan);">
+        <h3 style="font-family: var(--font-display); font-size: 18px; margin-bottom: 8px; color: var(--whoop-cyan);">The Sleep-Hypertrophy Axis: Why Sleep Builds Muscle</h3>
+        <div class="hgh-insights-content">
+          <p style="font-size: 14px; color: var(--text-primary); line-height: 1.6; margin-bottom: 12px;">
+            <strong>Nocturnal Growth Hormone Secretion:</strong> Up to <strong>85% of your body's daily Human Growth Hormone (HGH)</strong> is released in pulsatile waves during <strong>Slow Wave Sleep (Deep Sleep)</strong>.
+          </p>
+          <div class="hgh-alert-box" id="hgh-current-status-box">
+            <!-- Dynamic HGH status inserted by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Daily Nutrition Check-In & Tracking Form -->
+      <div class="card-glass" style="margin-top: 24px; padding: 24px;">
+        <h3 style="font-family: var(--font-display); font-size: 18px; margin-bottom: 8px;">Log Today's Intake</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 18px;">Track your daily nutrition progress to ensure you hit your hypertrophy targets.</p>
+        <form id="form-log-nutrition" class="nutrition-form-grid">
+          <div class="form-group">
+            <label for="input-log-calories">Calories (kcal)</label>
+            <input type="number" id="input-log-calories" placeholder="e.g. 2750" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="input-log-protein">Protein (g)</label>
+            <input type="number" id="input-log-protein" placeholder="e.g. 165" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="input-log-carbs">Carbs (g)</label>
+            <input type="number" id="input-log-carbs" placeholder="e.g. 330" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="input-log-fats">Fats (g)</label>
+            <input type="number" id="input-log-fats" placeholder="e.g. 75" class="form-input">
+          </div>
+          <div class="form-group" style="align-self: flex-end;">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Save Daily Intake</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div> <!-- /dashboard-shell -->
+
+  <!-- Modal: Add Custom Habit -->
+  <div id="modal-add-habit" class="modal-backdrop hidden">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>Create New Habit</h3>
+        <button id="btn-close-modal" class="btn-icon" aria-label="Close modal">&times;</button>
+      </div>
+      <form id="form-add-habit" class="modal-body">
+        <div class="form-group">
+          <label for="habit-name">Habit Name</label>
+          <input type="text" id="habit-name" placeholder="e.g. 10 Min Meditation, Creatine" required class="form-input">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="habit-icon">Emoji / Icon</label>
+            <input type="text" id="habit-icon" placeholder="⚡" maxlength="4" value="⚡" class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="habit-category">Category</label>
+            <select id="habit-category" class="form-select">
+              <option value="Sleep">Sleep</option>
+              <option value="Nutrition">Nutrition</option>
+              <option value="Recovery">Recovery</option>
+              <option value="Circadian">Circadian</option>
+              <option value="Training">Training</option>
+              <option value="Mindset">Mindset</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="habit-desc">Hypothesis / Description</label>
+          <input type="text" id="habit-desc" placeholder="e.g. Reduces stress before sleep" class="form-input">
+        </div>
+        <div class="modal-footer">
+          <button type="button" id="btn-cancel-modal" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Habit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <p>WHOOP Performance & Hypertrophy Engine • Calibrated for Hruthik Sreeperumbudur</p>
+      <p class="footer-sub">OAuth 2.0 Secure Local Architecture • Zero Cloud Telemetry</p>
+    </div>
+  </footer>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>

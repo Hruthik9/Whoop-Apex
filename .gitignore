@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment variables & API credentials (NEVER commit to git)
+.env
+.env.*
+!.env.example
+credentials.txt
+*.local
+
+# Local Database & OAuth tokens (contains personal health history and access tokens)
+data/store.json
+data/tokens.json
+data/*.tmp
+
+# OS & Temp Files
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+Screenshot*.png

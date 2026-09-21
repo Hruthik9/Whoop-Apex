@@ -1,0 +1,32 @@
+{
+  "name": "whoop-apex",
+  "version": "1.0.0",
+  "description": "Self-hosted WHOOP biometrics analytics, habit correlation engine, and hypertrophy/fat-loss velocity lab",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hruthik9/Whoop-Apex.git"
+  },
+  "keywords": [
+    "whoop",
+    "whoop-api",
+    "biometrics",
+    "hrv",
+    "sleep-tracking",
+    "hypertrophy",
+    "vo2max",
+    "health-dashboard",
+    "fitness-analytics"
+  ],
+  "author": "Hruthik Sreeperumbudur",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
