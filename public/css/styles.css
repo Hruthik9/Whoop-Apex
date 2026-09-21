@@ -628,16 +628,22 @@ body {
 }
 
 .feature-badge-count {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: #0F1217;
-  color: #FFFFFF;
-  font-size: 11px;
+  width: auto;
+  min-width: unset;
+  height: auto;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: rgba(48, 110, 232, 0.12);
+  color: #1E53C4;
+  border: 1px solid rgba(48, 110, 232, 0.25);
+  font-size: 13px;
   font-weight: 700;
-  display: flex;
+  font-family: var(--font-mono, monospace);
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 
 /* Active Habits Card */
