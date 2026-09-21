@@ -36,7 +36,7 @@ Most fitness trackers leave you with unanswered questions:
 
 | 🔬 Habit Causality Engine | ⏱️ Zero-Discrepancy Sleep | 📈 Hypertrophy & Fat Loss Lab | 🫀 Aerobic Power & VO₂ Max |
 | :--- | :--- | :--- | :--- |
-| Discovers exactly which habits boost or destroy your recovery with empirical $\pm\%$ deltas. | Sums raw millisecond durations to eliminate rounding errors. 100% match with WHOOP mobile. | Toggle between Lean Bulk and Shred with 30/60/90/180-day progress projections. | Uth–Sørensen VO₂ Max estimation paired with Norwegian 4x4 and Zone 2 protocols. |
+| Discovers exactly which habits boost or destroy your recovery with empirical ±% deltas. | Sums raw millisecond durations to eliminate rounding errors. 100% match with WHOOP mobile. | Toggle between Lean Bulk and Shred with 30/60/90/180-day progress projections. | Uth–Sørensen VO₂ Max estimation paired with Norwegian 4x4 and Zone 2 protocols. |
 
 ---
 
@@ -44,8 +44,8 @@ Most fitness trackers leave you with unanswered questions:
 
 | Capability | Standard Wearable Apps | WHOOP-Apex |
 | :--- | :--- | :--- |
-| **Habit Intelligence** | Static checklists with zero statistical correlation | **Empirical Delta Matrix**: Quantifies exact $\pm\%$ recovery, $\pm\text{ms}$ HRV, and $\pm\text{min}$ slow wave sleep for every habit |
-| **Body Composition** | Generic calorie counters ignoring wearable strain | **Dynamic Velocity Engine**: Calibrated $+350\text{ kcal}$ lean bulk vs $-450\text{ kcal}$ cut with 30/60/90/180-day progress projections |
+| **Habit Intelligence** | Static checklists with zero statistical correlation | **Empirical Delta Matrix**: Quantifies exact ±% recovery, ±ms HRV, and ±min slow wave sleep for every habit |
+| **Body Composition** | Generic calorie counters ignoring wearable strain | **Dynamic Velocity Engine**: Calibrated +350 kcal lean bulk vs -450 kcal cut with 30/60/90/180-day progress projections |
 | **Sleep Architecture** | Compounding rounding discrepancies between stages | **Exact Millisecond Engine**: Raw duration summation that eliminates compounding minute errors (`3h 46m` exact match) |
 | **Cardio Ceiling** | Vague cardiovascular load scores | **VO₂ Max & Protocols**: Uth–Sørensen calculation with Norwegian 4x4 and Zone 2 polarized training plans |
 | **Data Privacy** | Cloud telemetry, third-party trackers, ad monetization | **100% Sovereign & Local**: Zero external tracking, zero cloud telemetry, self-hosted on your machine |
@@ -72,24 +72,32 @@ Designed with an ultra-minimalist, distraction-free interface inspired by profes
 ### 2. 🧪 Habit Correlation & Delta Engine
 - **Empirical Impact Matrix**: Correlates daily active habits against nocturnal recovery metrics across 30+ days of history.
 - **Statistical Deltas**: Calculates precise impact on:
-  - Recovery Score ($\pm \%$)
-  - Heart Rate Variability ($\pm \text{ms}$)
-  - Resting Heart Rate ($\pm \text{bpm}$)
-  - Slow Wave Sleep ($\pm \text{min}$)
+  - Recovery Score (±%)
+  - Heart Rate Variability (±ms)
+  - Resting Heart Rate (±bpm)
+  - Slow Wave Sleep (±min)
 - **Actionable Insights**: Identifies personal "Super Boosters" and "Severe Disrupters" with statistical confidence ratings.
 
 ### 3. 🔬 Hypertrophy & Fat Loss Velocity Lab
 - **Dynamic Goal Switcher**: Seamlessly toggle between **Muscle Gain (Lean Bulk)** and **Fat Loss (Cut & Shred)** with real-time target adjustments:
-  - **Muscle Gain**: $+350\text{ kcal}$ clean surplus, $2.1\text{ g/kg}$ protein for optimal Muscle Protein Synthesis (MPS), $1.0\text{ g/kg}$ healthy fats.
-  - **Fat Loss**: $-450\text{ kcal}$ safe deficit ($3,150\text{ kcal/wk}$), $2.3\text{ g/kg}$ lean-sparing protein, $0.8\text{ g/kg}$ essential hormone floor.
+  - **Muscle Gain**: +350 kcal clean surplus, 2.1 g/kg protein for optimal Muscle Protein Synthesis (MPS), 1.0 g/kg healthy fats.
+  - **Fat Loss**: -450 kcal safe deficit (3,150 kcal/wk), 2.3 g/kg lean-sparing protein, 0.8 g/kg essential hormone floor.
 - **Timeline Projections & Velocity Engine**:
   - Models approximate rate of progress across **30, 60, 90, and 180 days**.
-  - Shows both absolute weight change ($\text{kg} / \text{lbs}$) and percentage change ($\%$ muscle gained / $\%$ fat lost).
+  - Shows both absolute weight change (kg / lbs) and percentage change (% muscle gained / % fat lost).
   - Based on the peer-reviewed Aragon–McDonald physiological hypertrophy and fat-oxidation models.
-- **Protein Distribution & Leucine Schedule**: 4-meal timing schedule calibrated to trigger the $\ge 3.2\text{g}$ leucine threshold for MPS.
+- **Protein Distribution & Leucine Schedule**: 4-meal timing schedule calibrated to trigger the ≥ 3.2g leucine threshold for MPS.
 
 ### 4. 🫀 VO₂ Max & Metabolic Engine
-- **Cardiovascular Ceiling**: Estimates VO₂ Max via the Uth–Sørensen formula ($15.3 \times \frac{\text{HR}_{\text{max}}}{\text{HR}_{\text{rest}}}$).
+- **Cardiovascular Ceiling**: Computes cardiorespiratory fitness (VO₂ Max in $\text{mL}\cdot\text{kg}^{-1}\cdot\text{min}^{-1}$) via the validated **Uth–Sørensen** physiological model:
+
+$$
+\text{VO}_2\text{ Max} = 15.3 \times \left( \frac{\text{HR}_{\text{max}}}{\text{HR}_{\text{rest}}} \right)
+$$
+
+  - **$\text{HR}_{\text{max}}$**: Estimated max heart rate using Tanaka's physiological formula ($208 - 0.7 \times \text{age}$)
+  - **$\text{HR}_{\text{rest}}$**: Baseline nocturnal resting heart rate synced directly from WHOOP
+
 - **Evidence-Based Protocols**:
   - **Norwegian 4x4 (Gold Standard)**: 4 rounds of 4 min at 90–95% HRmax with 3 min Zone 2 active recovery.
   - **Zone 2 Polarized Base**: 45–60 min at 60–70% HRmax to build mitochondrial density and lipid oxidation.
