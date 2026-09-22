@@ -2,8 +2,12 @@
 
 const CIRCLE_CIRCUMFERENCE = 414.69; // 2 * Math.PI * 66
 
+function getLocalDateString(d = new Date()) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
 let state = {
-  selectedDate: new Date().toISOString().split('T')[0],
+  selectedDate: getLocalDateString(),
   currentTab: 'overview',
   currentGoal: 'gain',
   auth: { connected: false, user: null, has_data: false },
@@ -63,8 +67,13 @@ function initEventListeners() {
 
   // Date Selector
   const dateInput = document.getElementById('date-selector');
+  const todayLocal = getLocalDateString();
+  dateInput.max = todayLocal;
   dateInput.value = state.selectedDate;
   dateInput.addEventListener('change', async (e) => {
+    if (e.target.value > todayLocal) {
+      e.target.value = todayLocal;
+    }
     state.selectedDate = e.target.value;
     updateDateDisplay();
     await loadHabitsAndLogs();
@@ -244,7 +253,7 @@ function switchTab(tabId) {
 
 function updateDateDisplay() {
   const label = document.getElementById('habit-selected-date-label');
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateString();
   if (label) {
     if (state.selectedDate === todayStr) {
       label.textContent = 'Today';
@@ -301,7 +310,9 @@ async function loadDashboardData() {
 
     if (data.history.length > 0) {
       const latestDate = data.history[data.history.length - 1].date;
-      if (!document.getElementById('date-selector').value || document.getElementById('date-selector').value === new Date().toISOString().split('T')[0]) {
+      const todayStr = getLocalDateString();
+      const currentVal = document.getElementById('date-selector').value;
+      if (!currentVal || currentVal > todayStr || currentVal === todayStr) {
         state.selectedDate = latestDate;
         document.getElementById('date-selector').value = latestDate;
         updateDateDisplay();
@@ -455,7 +466,14 @@ async function logDailyNutrition() {
 // -------------------------------------------------------------
 
 function updateAllViews() {
-  const dayRecord = state.data.history.find(h => h.date === state.selectedDate) || state.data.latest;
+  const todayLocal = getLocalDateString();
+  if (state.selectedDate > todayLocal) {
+    state.selectedDate = todayLocal;
+    const dateInput = document.getElementById('date-selector');
+    if (dateInput) dateInput.value = todayLocal;
+  }
+
+  const dayRecord = state.data.history.find(h => h.date === state.selectedDate) || null;
 
   updateOverviewGauges(dayRecord);
   updateRecoveryLabView(dayRecord);
@@ -490,6 +508,46 @@ function updateOverviewGauges(dayRecord) {
     if (recRingEl) setRingProgress(recRingEl, 0);
     if (strainRingEl) setRingProgress(strainRingEl, 0);
     if (sleepRingEl) setRingProgress(sleepRingEl, 0);
+
+    // Reset status capsules
+    const capRec = document.getElementById('cap-rec-val');
+    if (capRec) capRec.textContent = '--';
+    const capSleep = document.getElementById('cap-sleep-val');
+    if (capSleep) capSleep.textContent = '--';
+    const capStrain = document.getElementById('cap-strain-val');
+    if (capStrain) capStrain.textContent = '--';
+    const capHrv = document.getElementById('cap-hrv-val');
+    if (capHrv) capHrv.textContent = '--';
+
+    // Reset micro-trend stats
+    const topHrv = document.getElementById('top-stat-hrv');
+    if (topHrv) topHrv.textContent = '--';
+    const topRhr = document.getElementById('top-stat-rhr');
+    if (topRhr) topRhr.textContent = '--';
+    const topSleep = document.getElementById('top-stat-sleep');
+    if (topSleep) topSleep.textContent = '--';
+
+    // Reset summary box
+    const sumBadge = document.getElementById('summary-badge-tier');
+    if (sumBadge) {
+      sumBadge.textContent = 'NO DATA';
+      sumBadge.className = 'badge badge-yellow';
+    }
+    const sumRec = document.getElementById('sum-rec-score');
+    if (sumRec) sumRec.textContent = '--';
+    const sumDebt = document.getElementById('sum-debt-score');
+    if (sumDebt) sumDebt.textContent = '--';
+    const sumFooter = document.getElementById('sum-footer-text');
+    if (sumFooter) sumFooter.textContent = 'No biometric telemetry recorded for this selected date.';
+
+    // Reset protocol card
+    const featAdvice = document.getElementById('feature-card-advice');
+    if (featAdvice) featAdvice.textContent = 'No WHOOP telemetry recorded for this date. Log activity or sync WHOOP to view protocol.';
+    const featStrain = document.getElementById('feat-target-strain');
+    if (featStrain) featStrain.textContent = '--';
+    const featFocus = document.getElementById('feat-focus-label');
+    if (featFocus) featFocus.textContent = 'Rest & Recovery';
+
     return;
   }
 

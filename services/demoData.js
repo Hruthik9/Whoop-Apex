@@ -5,11 +5,11 @@ function populateDemoData() {
   const habitLogs = {};
   const today = new Date();
 
-  // Generate 30 days of realistic history
+  // Generate 30 days of realistic history ending on today's local date
   for (let i = 29; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const dateKey = d.toISOString().split('T')[0];
+    const dateKey = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 
     // Determine habits for this day
     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
