@@ -148,20 +148,26 @@ app.post('/api/habits/log', (req, res) => {
   res.json({ success: true, date, habits: updated });
 });
 
-// Add a custom habit
+// Get predefined habit catalog
+app.get('/api/habits/catalog', (req, res) => {
+  res.json({ catalog: db.getCatalog() });
+});
+
+// Add a habit (from catalog or custom)
 app.post('/api/habits/create', (req, res) => {
-  const { name, category, icon, description } = req.body;
+  const { id: customId, name, category, icon, description, impact } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'Habit name is required' });
   }
 
-  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const id = customId || name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
   const habit = {
     id,
     name,
     category: category || 'General',
     icon: icon || '⚡',
-    description: description || ''
+    description: description || '',
+    impact: impact || ''
   };
 
   db.addHabit(habit);

@@ -13,6 +13,7 @@ let state = {
   auth: { connected: false, user: null, has_data: false },
   data: { latest: null, history: [] },
   habits: [],
+  catalog: [],
   dailyLogs: {},
   correlations: null,
   hypertrophy: null,
@@ -28,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAuthStatus();
   await loadDashboardData();
   await loadHabitsAndLogs();
+  await loadHabitCatalog();
   await loadCorrelations();
   await loadHypertrophyData();
 });
@@ -179,20 +181,70 @@ function initEventListeners() {
     });
   }
 
-  // Modal Handlers
+  // Modal Handlers & Tab Switcher
   const modal = document.getElementById('modal-add-habit');
-  const openModal = () => modal.classList.remove('hidden');
+  const openModal = (tab = 'catalog') => {
+    switchModalTab(tab);
+    renderCatalog();
+    modal.classList.remove('hidden');
+  };
   const closeModal = () => modal.classList.add('hidden');
 
+  function switchModalTab(tab) {
+    const tabBtnCatalog = document.getElementById('tab-btn-catalog');
+    const tabBtnCustom = document.getElementById('tab-btn-custom');
+    const viewCatalog = document.getElementById('view-habit-catalog');
+    const viewCustom = document.getElementById('form-add-habit');
+
+    if (tab === 'catalog') {
+      if (tabBtnCatalog) tabBtnCatalog.classList.add('active');
+      if (tabBtnCustom) tabBtnCustom.classList.remove('active');
+      if (viewCatalog) viewCatalog.classList.remove('hidden');
+      if (viewCustom) viewCustom.classList.add('hidden');
+    } else {
+      if (tabBtnCustom) tabBtnCustom.classList.add('active');
+      if (tabBtnCatalog) tabBtnCatalog.classList.remove('active');
+      if (viewCustom) viewCustom.classList.remove('hidden');
+      if (viewCatalog) viewCatalog.classList.add('hidden');
+    }
+  }
+
+  const tabBtnCatalog = document.getElementById('tab-btn-catalog');
+  if (tabBtnCatalog) tabBtnCatalog.addEventListener('click', () => switchModalTab('catalog'));
+  const tabBtnCustom = document.getElementById('tab-btn-custom');
+  if (tabBtnCustom) tabBtnCustom.addEventListener('click', () => switchModalTab('custom'));
+
   const btnAddHabit = document.getElementById('btn-add-habit');
-  if (btnAddHabit) btnAddHabit.addEventListener('click', openModal);
+  if (btnAddHabit) btnAddHabit.addEventListener('click', () => openModal('catalog'));
   const btnAddTab = document.getElementById('btn-add-habit-tab');
-  if (btnAddTab) btnAddTab.addEventListener('click', openModal);
+  if (btnAddTab) btnAddTab.addEventListener('click', () => openModal('catalog'));
+  const btnOpenBanner = document.getElementById('btn-open-catalog-banner');
+  if (btnOpenBanner) btnOpenBanner.addEventListener('click', () => openModal('catalog'));
 
   const btnCloseModal = document.getElementById('btn-close-modal');
   if (btnCloseModal) btnCloseModal.addEventListener('click', closeModal);
   const btnCancelModal = document.getElementById('btn-cancel-modal');
   if (btnCancelModal) btnCancelModal.addEventListener('click', closeModal);
+
+  // Catalog Category Filter Pills
+  const filterPills = document.querySelectorAll('.catalog-pill');
+  filterPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      filterPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentCatalogFilter = pill.getAttribute('data-filter');
+      renderCatalog();
+    });
+  });
+
+  // Catalog Search Input
+  const searchInput = document.getElementById('catalog-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      currentCatalogSearch = e.target.value;
+      renderCatalog();
+    });
+  }
 
   const formAddHabit = document.getElementById('form-add-habit');
   if (formAddHabit) {
@@ -427,9 +479,115 @@ async function createCustomHabit() {
       document.getElementById('form-add-habit').reset();
       await loadHabitsAndLogs();
       await loadCorrelations();
+      renderCatalog();
     }
   } catch (err) {
     console.error('Failed to create habit:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// Predefined Habit Catalog Logic
+// -------------------------------------------------------------
+let currentCatalogFilter = 'All';
+let currentCatalogSearch = '';
+
+async function loadHabitCatalog() {
+  try {
+    const res = await fetch('/api/habits/catalog');
+    const data = await res.json();
+    state.catalog = data.catalog || [];
+    renderCatalog();
+  } catch (err) {
+    console.error('Failed to load habit catalog:', err);
+  }
+}
+
+function renderCatalog() {
+  const container = document.getElementById('catalog-grid');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const trackedIds = new Set((state.habits || []).map(h => h.id));
+  const query = currentCatalogSearch.toLowerCase().trim();
+
+  const filtered = (state.catalog || []).filter(item => {
+    const matchesFilter = currentCatalogFilter === 'All' || item.category === currentCatalogFilter;
+    const matchesSearch = !query || 
+      item.name.toLowerCase().includes(query) || 
+      item.description.toLowerCase().includes(query) ||
+      item.category.toLowerCase().includes(query);
+    return matchesFilter && matchesSearch;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align: center; color: var(--text-muted); padding: 30px 10px;">
+        No habits match your search or filter. Try another keyword or create a custom habit!
+      </div>
+    `;
+    return;
+  }
+
+  filtered.forEach(item => {
+    const isTracked = trackedIds.has(item.id);
+    const card = document.createElement('div');
+    card.className = 'catalog-card';
+    card.innerHTML = `
+      <div>
+        <div class="catalog-card-header">
+          <div class="catalog-card-title">
+            <span class="catalog-card-icon">${item.icon}</span>
+            <span>${item.name}</span>
+          </div>
+          <span class="catalog-impact-badge">${item.impact || '+Impact'}</span>
+        </div>
+        <p class="catalog-card-desc" style="margin-top: 8px;">${item.description}</p>
+      </div>
+      <div class="catalog-card-footer">
+        <span class="catalog-category-tag">${item.category}</span>
+        ${isTracked ? 
+          '<button class="btn-catalog-action btn-catalog-tracked" disabled>✓ Active in Tracker</button>' : 
+          `<button class="btn-catalog-action btn-catalog-add" data-id="${item.id}">+ Add to Tracker</button>`
+        }
+      </div>
+    `;
+
+    const addBtn = card.querySelector('.btn-catalog-add');
+    if (addBtn) {
+      addBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        addBtn.disabled = true;
+        addBtn.textContent = 'Adding...';
+        await addPredefinedHabit(item);
+      });
+    }
+
+    container.appendChild(card);
+  });
+}
+
+async function addPredefinedHabit(item) {
+  try {
+    const res = await fetch('/api/habits/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        icon: item.icon,
+        description: item.description,
+        impact: item.impact
+      })
+    });
+    if (res.ok) {
+      await loadHabitsAndLogs();
+      await loadCorrelations();
+      renderCatalog();
+    }
+  } catch (err) {
+    console.error('Failed to add habit from catalog:', err);
   }
 }
 

@@ -541,11 +541,21 @@
           <p class="section-desc">Empirical difference in Recovery, HRV, and Deep Sleep when habits are active vs inactive</p>
         </div>
         <div>
-          <button class="btn btn-outline" id="btn-add-habit-tab">
+          <button class="btn btn-primary" id="btn-add-habit-tab">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-            <span>Add Custom Habit</span>
+            <span>Browse Habit Library</span>
           </button>
         </div>
+      </div>
+
+      <!-- High-Impact Recommendations Banner -->
+      <div class="habit-library-banner">
+        <div class="library-banner-text">
+          <span class="library-banner-tag">HIGH-IMPACT PROTOCOL DISCOVERY</span>
+          <h4 style="margin: 4px 0 2px; font-size: 15px; color: #FFFFFF;">24 Pre-Configured Science-Backed Habits</h4>
+          <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">Browse proven physiological levers across Sleep, Autonomic Recovery, Nutrition, Training, and Mindset to quantify their impact on your WHOOP metrics.</p>
+        </div>
+        <button class="btn btn-outline" id="btn-open-catalog-banner">Explore Library & Add Habits →</button>
       </div>
 
       <!-- Insights Cards Grid -->
@@ -835,14 +845,50 @@
     </div>
   </div> <!-- /dashboard-shell -->
 
-  <!-- Modal: Add Custom Habit -->
+  <!-- Modal: Habit Library & Custom Tracker -->
   <div id="modal-add-habit" class="modal-backdrop hidden">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-dialog-lg">
       <div class="modal-header">
-        <h3>Create New Habit</h3>
+        <div>
+          <span class="card-tag">EVIDENCE-BASED PROTOCOLS</span>
+          <h3 style="margin-top: 2px;">Habit Library & Tracker</h3>
+        </div>
         <button id="btn-close-modal" class="btn-icon" aria-label="Close modal">&times;</button>
       </div>
-      <form id="form-add-habit" class="modal-body">
+
+      <!-- Modal Tabs: Predefined Catalog vs Custom Habit -->
+      <div class="modal-tabs-nav">
+        <button type="button" class="modal-tab-btn active" id="tab-btn-catalog" data-modal-tab="catalog">
+          <span>⚡ Curated High-Impact Habits (24)</span>
+        </button>
+        <button type="button" class="modal-tab-btn" id="tab-btn-custom" data-modal-tab="custom">
+          <span>✏️ Create Custom Habit</span>
+        </button>
+      </div>
+
+      <!-- View 1: Predefined Catalog -->
+      <div id="view-habit-catalog" class="modal-tab-view">
+        <!-- Search and Filter Bar -->
+        <div class="catalog-controls">
+          <input type="text" id="catalog-search" class="form-input" placeholder="Search habits (e.g. magnesium, sauna, sleep, cold...)">
+          <div class="catalog-filter-bar">
+            <button type="button" class="catalog-pill active" data-filter="All">All (24)</button>
+            <button type="button" class="catalog-pill" data-filter="Sleep">Sleep (7)</button>
+            <button type="button" class="catalog-pill" data-filter="Recovery">Recovery (6)</button>
+            <button type="button" class="catalog-pill" data-filter="Nutrition">Nutrition (6)</button>
+            <button type="button" class="catalog-pill" data-filter="Training">Training (3)</button>
+            <button type="button" class="catalog-pill" data-filter="Mindset">Mindset (3)</button>
+          </div>
+        </div>
+
+        <!-- Catalog Items Grid -->
+        <div class="catalog-grid" id="catalog-grid">
+          <!-- Populated dynamically by app.js -->
+        </div>
+      </div>
+
+      <!-- View 2: Custom Habit Form -->
+      <form id="form-add-habit" class="modal-tab-view hidden">
         <div class="form-group">
           <label for="habit-name">Habit Name</label>
           <input type="text" id="habit-name" placeholder="e.g. 10 Min Meditation, Creatine" required class="form-input">
@@ -865,10 +911,10 @@
           </div>
         </div>
         <div class="form-group">
-          <label for="habit-desc">Hypothesis / Description</label>
-          <input type="text" id="habit-desc" placeholder="e.g. Reduces stress before sleep" class="form-input">
+          <label for="habit-desc">Hypothesis / Scientific Mechanism</label>
+          <input type="text" id="habit-desc" placeholder="e.g. Reduces evening cortisol and lowers sleep-onset latency" class="form-input">
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" style="padding: 16px 0 0 0; margin-top: 16px; border-top: 1px solid var(--border-subtle);">
           <button type="button" id="btn-cancel-modal" class="btn btn-secondary">Cancel</button>
           <button type="submit" class="btn btn-primary">Create Habit</button>
         </div>
