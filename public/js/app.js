@@ -948,13 +948,163 @@ function updateRecoveryLabView(dayRecord) {
 // 3. Sleep Architecture View
 function updateSleepArchitectureView(dayRecord) {
   const sleep = dayRecord?.sleep || {};
+  const hasSleep = sleep && (sleep.total_asleep_min > 0 || sleep.total_in_bed_min > 0);
 
-  document.getElementById('sleep-exact-time').textContent = formatMinutesToHours(sleep.total_asleep_min);
-  document.getElementById('sleep-sws-exact').textContent = `${sleep.slow_wave_sleep_min || '--'} min`;
-  document.getElementById('sleep-eff-exact').textContent = `${sleep.efficiency_percentage || '--'}%`;
+  if (!hasSleep) {
+    const elWindow = document.getElementById('sleep-window-times');
+    if (elWindow) elWindow.textContent = 'No sleep recorded for this date';
+    const elRestVal = document.getElementById('sleep-restorative-val');
+    if (elRestVal) elRestVal.textContent = '--%';
+    const elRestStatus = document.getElementById('sleep-restorative-status');
+    if (elRestStatus) {
+      elRestStatus.textContent = 'NO DATA';
+      elRestStatus.className = 'pill-badge badge-slate';
+    }
 
-  const debtMin = sleep.need?.debt_min || (sleep.need?.total_min ? Math.max(0, sleep.need.total_min - (sleep.total_asleep_min || 0)) : 0);
-  document.getElementById('sleep-debt-val').textContent = `${debtMin} min`;
+    ['hypno-seg-deep', 'hypno-seg-rem', 'hypno-seg-light', 'hypno-seg-awake'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.width = '0%';
+    });
+
+    ['legend-deep-val', 'legend-rem-val', 'legend-light-val', 'legend-awake-val'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '--';
+    });
+
+    const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+    setTxt('stage-deep-time', '--');
+    setTxt('stage-deep-pct', '--% of sleep');
+    setTxt('stage-rem-time', '--');
+    setTxt('stage-rem-pct', '--% of sleep');
+    setTxt('stage-light-time', '--');
+    setTxt('stage-light-pct', '--% of sleep');
+    setTxt('stage-awake-time', '--');
+    setTxt('stage-awake-disturbances', '-- disturbances');
+    setTxt('stage-cycles-val', '--');
+    setTxt('stage-inbed-val', '--');
+
+    setTxt('sleep-eff-exact', '--%');
+    setTxt('sleep-consistency-val', '--%');
+    setTxt('sleep-resp-rate-val', '-- rpm');
+    setTxt('sleep-perf-val', '--%');
+
+    setTxt('sleep-baseline-need', '--h --m');
+    setTxt('sleep-debt-val', '-- min');
+    setTxt('sleep-strain-need', '-- min');
+    setTxt('sleep-total-need-val', '--h --m');
+    return;
+  }
+
+  // Active sleep values
+  const totalAsleepMin = sleep.total_asleep_min || 0;
+  const swsMin = sleep.slow_wave_sleep_min || 0;
+  const remMin = sleep.rem_sleep_min || 0;
+  const lightMin = sleep.light_sleep_min || 0;
+  const awakeMin = sleep.awake_min || 0;
+  const inBedMin = sleep.total_in_bed_min || (totalAsleepMin + awakeMin);
+
+  // Percentages of total asleep time
+  const deepPct = totalAsleepMin > 0 ? Math.round((swsMin / totalAsleepMin) * 100) : 0;
+  const remPct = totalAsleepMin > 0 ? Math.round((remMin / totalAsleepMin) * 100) : 0;
+  const lightPct = totalAsleepMin > 0 ? Math.round((lightMin / totalAsleepMin) * 100) : 0;
+
+  // Hypnogram bar percentages (out of total in bed)
+  const barTotal = Math.max(inBedMin, totalAsleepMin + awakeMin, 1);
+  const barDeepPct = Math.round((swsMin / barTotal) * 100);
+  const barRemPct = Math.round((remMin / barTotal) * 100);
+  const barLightPct = Math.round((lightMin / barTotal) * 100);
+  const barAwakePct = Math.max(0, 100 - (barDeepPct + barRemPct + barLightPct));
+
+  // Restorative Sleep (Deep + REM)
+  const restorativeMin = swsMin + remMin;
+  const restorativePct = totalAsleepMin > 0 ? Math.round((restorativeMin / totalAsleepMin) * 100) : 0;
+
+  // Sleep Window
+  const elWindow = document.getElementById('sleep-window-times');
+  if (elWindow) {
+    if (sleep.start && sleep.end) {
+      const startD = new Date(sleep.start);
+      const endD = new Date(sleep.end);
+      const startStr = startD.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const endStr = endD.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      elWindow.textContent = `Bedtime: ${startStr} ➔ Wake: ${endStr} • Total In Bed: ${formatMinutesToHours(inBedMin)} • Total Asleep: ${formatMinutesToHours(totalAsleepMin)}`;
+    } else {
+      elWindow.textContent = `Total In Bed: ${formatMinutesToHours(inBedMin)} • Total Asleep: ${formatMinutesToHours(totalAsleepMin)}`;
+    }
+  }
+
+  // Restorative status
+  const elRestVal = document.getElementById('sleep-restorative-val');
+  if (elRestVal) elRestVal.textContent = `${restorativePct}% (${formatMinutesToHours(restorativeMin)})`;
+  const restStatus = document.getElementById('sleep-restorative-status');
+  if (restStatus) {
+    if (restorativePct >= 40) {
+      restStatus.textContent = 'OPTIMAL (≥40%)';
+      restStatus.className = 'pill-badge badge-green';
+    } else if (restorativePct >= 35) {
+      restStatus.textContent = 'GOOD (35-39%)';
+      restStatus.className = 'pill-badge badge-yellow';
+    } else {
+      restStatus.textContent = 'SUB-OPTIMAL (<35%)';
+      restStatus.className = 'pill-badge badge-red';
+    }
+  }
+
+  // Update Hypnogram bar widths
+  const setWidth = (id, pct) => { const el = document.getElementById(id); if (el) el.style.width = `${pct}%`; };
+  setWidth('hypno-seg-deep', barDeepPct);
+  setWidth('hypno-seg-rem', barRemPct);
+  setWidth('hypno-seg-light', barLightPct);
+  setWidth('hypno-seg-awake', barAwakePct);
+
+  const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  setTxt('legend-deep-val', `${swsMin}m (${deepPct}%)`);
+  setTxt('legend-rem-val', `${remMin}m (${remPct}%)`);
+  setTxt('legend-light-val', `${lightMin}m (${lightPct}%)`);
+  setTxt('legend-awake-val', `${awakeMin}m`);
+
+  // Stage Cards
+  setTxt('stage-deep-time', formatMinutesToHours(swsMin));
+  setTxt('stage-deep-pct', `${deepPct}% of sleep (${swsMin} min)`);
+  const chipDeep = document.getElementById('chip-deep-optimal');
+  if (chipDeep) {
+    chipDeep.textContent = deepPct >= 20 && deepPct <= 25 ? '✓ Optimal (20-25%)' : (deepPct > 25 ? '↑ High (>25%)' : '↓ Low (<20%)');
+  }
+
+  setTxt('stage-rem-time', formatMinutesToHours(remMin));
+  setTxt('stage-rem-pct', `${remPct}% of sleep (${remMin} min)`);
+  const chipRem = document.getElementById('chip-rem-optimal');
+  if (chipRem) {
+    chipRem.textContent = remPct >= 20 && remPct <= 25 ? '✓ Optimal (20-25%)' : (remPct > 25 ? '↑ High (>25%)' : '↓ Low (<20%)');
+  }
+
+  setTxt('stage-light-time', formatMinutesToHours(lightMin));
+  setTxt('stage-light-pct', `${lightPct}% of sleep (${lightMin} min)`);
+
+  setTxt('stage-awake-time', `${awakeMin} min`);
+  const distCount = sleep.disturbance_count ?? '--';
+  setTxt('stage-awake-disturbances', `${distCount} wake events`);
+  setTxt('stage-cycles-val', sleep.sleep_cycles ?? '--');
+  setTxt('stage-inbed-val', formatMinutesToHours(inBedMin));
+
+  // Quality Metrics
+  const effPct = sleep.efficiency_percentage || (inBedMin > 0 ? Math.round((totalAsleepMin / inBedMin) * 100) : 0);
+  setTxt('sleep-eff-exact', `${effPct}%`);
+  setTxt('sleep-consistency-val', sleep.consistency_percentage ? `${sleep.consistency_percentage}%` : 'N/A');
+  setTxt('sleep-resp-rate-val', sleep.respiratory_rate ? `${sleep.respiratory_rate} rpm` : '-- rpm');
+  setTxt('sleep-perf-val', `${sleep.performance_percentage || sleep.score || '--'}%`);
+
+  // Sleep Need Decomposition
+  const need = sleep.need || {};
+  const baseNeed = need.baseline_min || 480;
+  const debt = need.debt_min || 0;
+  const strainNeed = need.strain_min || 0;
+  const totalNeed = need.total_min || (baseNeed + debt + strainNeed);
+
+  setTxt('sleep-baseline-need', formatMinutesToHours(baseNeed));
+  setTxt('sleep-debt-val', `+${debt} min`);
+  setTxt('sleep-strain-need', `+${strainNeed} min`);
+  setTxt('sleep-total-need-val', formatMinutesToHours(totalNeed));
 }
 
 // 4. Strain & Workouts View
@@ -1384,12 +1534,21 @@ function renderAllCharts() {
   const strainData = history.map(h => h.strain?.score ?? null);
   const caloriesData = history.map(h => Math.round((h.strain?.kilojoules || 0) * 0.239006));
 
-  const deepSleepData = history.map(h => h.sleep?.slow_wave_sleep_min ?? 0);
-  const remSleepData = history.map(h => h.sleep?.rem_sleep_min ?? 0);
-  const lightSleepData = history.map(h => h.sleep?.light_sleep_min ?? 0);
-  const awakeData = history.map(h => h.sleep?.awake_min ?? 0);
-  const sleepNeedData = history.map(h => h.sleep?.need?.total_min ? Math.round((h.sleep.need.total_min / 60) * 10) / 10 : 8.0);
-  const sleepActualData = history.map(h => h.sleep?.total_asleep_min ? Math.round((h.sleep.total_asleep_min / 60) * 10) / 10 : 0);
+  // Dedicated Sleep History (filtering to when sleep data is available from 08/21 onwards, capped to last 30 days)
+  const sleepEligible = history.filter(h => h.date >= '2026-08-21');
+  const sleepHistory = sleepEligible.length > 30 ? sleepEligible.slice(-30) : (sleepEligible.length > 0 ? sleepEligible : history.slice(-30));
+
+  const sleepLabels = sleepHistory.map(h => {
+    const parts = h.date.split('-');
+    return `${parts[1]}/${parts[2]}`;
+  });
+
+  const deepSleepData = sleepHistory.map(h => h.sleep?.slow_wave_sleep_min ?? 0);
+  const remSleepData = sleepHistory.map(h => h.sleep?.rem_sleep_min ?? 0);
+  const lightSleepData = sleepHistory.map(h => h.sleep?.light_sleep_min ?? 0);
+  const awakeData = sleepHistory.map(h => h.sleep?.awake_min ?? 0);
+  const sleepNeedData = sleepHistory.map(h => h.sleep?.need?.total_min ? Math.round((h.sleep.need.total_min / 60) * 10) / 10 : 8.0);
+  const sleepActualData = sleepHistory.map(h => h.sleep?.total_asleep_min ? Math.round((h.sleep.total_asleep_min / 60) * 10) / 10 : 0);
 
   // Common options
   const commonScales = {
@@ -1550,18 +1709,18 @@ function renderAllCharts() {
     });
   }
 
-  // 4. Sleep Stages Deep Chart
+  // 4. Sleep Stages Deep Chart (Filtered to last 30 days of available sleep data)
   const elSleepStages = document.getElementById('sleep-stages-deep-chart');
   if (elSleepStages && (!state.charts.sleepStages || state.currentTab === 'sleep')) {
     if (state.charts.sleepStages) state.charts.sleepStages.destroy();
     state.charts.sleepStages = new Chart(elSleepStages.getContext('2d'), {
       type: 'bar',
       data: {
-        labels,
+        labels: sleepLabels,
         datasets: [
           { label: 'Deep (SWS)', data: deepSleepData, backgroundColor: '#00E5FF', stack: 'Sleep' },
           { label: 'REM', data: remSleepData, backgroundColor: '#A855F7', stack: 'Sleep' },
-          { label: 'Light', data: lightSleepData, backgroundColor: '#334155', stack: 'Sleep' },
+          { label: 'Light', data: lightSleepData, backgroundColor: '#475569', stack: 'Sleep' },
           { label: 'Awake', data: awakeData, backgroundColor: '#FF3B30', stack: 'Sleep' }
         ]
       },
@@ -1579,14 +1738,14 @@ function renderAllCharts() {
     });
   }
 
-  // 5. Sleep Need vs Actual Chart
+  // 5. Sleep Need vs Actual Chart (Filtered to last 30 days of available sleep data)
   const elSleepNeed = document.getElementById('sleep-need-chart');
   if (elSleepNeed && (!state.charts.sleepNeed || state.currentTab === 'sleep')) {
     if (state.charts.sleepNeed) state.charts.sleepNeed.destroy();
     state.charts.sleepNeed = new Chart(elSleepNeed.getContext('2d'), {
       type: 'line',
       data: {
-        labels,
+        labels: sleepLabels,
         datasets: [
           {
             label: 'Sleep Needed (h)',

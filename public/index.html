@@ -388,46 +388,190 @@
     </div>
 
     <!-- ========================================================================= -->
-    <!-- TAB 3: SLEEP ARCHITECTURE -->
+    <!-- TAB 3: SLEEP ARCHITECTURE & STAGE INTELLIGENCE -->
     <!-- ========================================================================= -->
     <div class="tab-pane" id="pane-sleep">
       <div class="section-header">
         <div>
-          <h2 class="section-title">SLEEP ARCHITECTURE & CIRCADIAN ANALYSIS</h2>
-          <p class="section-desc">Slow Wave Sleep (Deep), REM, Sleep Debt, and Sleep Need Breakdown</p>
+          <h2 class="section-title">SLEEP ARCHITECTURE & STAGE INTELLIGENCE</h2>
+          <p class="section-desc">Slow Wave Sleep (Deep), REM, Light, Awake, Autonomic Recovery & Sleep Need Decomposition</p>
         </div>
       </div>
 
-      <!-- Sleep Metrics Grid -->
-      <div class="stat-chips-grid">
-        <div class="stat-chip">
-          <span class="stat-chip-label">Total Time Asleep</span>
-          <span class="stat-chip-val highlight-cyan" id="sleep-exact-time">--</span>
-          <span class="stat-chip-sub">Exact calculated duration</span>
+      <!-- 1. Interactive Night Hypnogram & Restorative Ratio Card -->
+      <div class="card-sleep-hypnogram">
+        <div class="hypnogram-header">
+          <div class="hypnogram-title-group">
+            <span class="card-tag">WHOOP STAGE TELEMETRY</span>
+            <h3 class="hypnogram-heading">Sleep Stage Distribution</h3>
+            <span class="hypnogram-sub" id="sleep-window-times">Bedtime: -- ➔ Wake: --</span>
+          </div>
+          <div class="hypnogram-status-group">
+            <div class="restorative-pill" id="sleep-restorative-pill">
+              <span class="pill-label">Restorative Sleep (Deep + REM):</span>
+              <strong id="sleep-restorative-val">--%</strong>
+              <span class="pill-badge badge-green" id="sleep-restorative-status">OPTIMAL</span>
+            </div>
+          </div>
         </div>
-        <div class="stat-chip">
-          <span class="stat-chip-label">Sleep Debt</span>
-          <span class="stat-chip-val highlight-red" id="sleep-debt-val">-- min</span>
-          <span class="stat-chip-sub">Accumulated deficit</span>
-        </div>
-        <div class="stat-chip">
-          <span class="stat-chip-label">Deep Sleep (SWS)</span>
-          <span class="stat-chip-val highlight-cyan" id="sleep-sws-exact">-- min</span>
-          <span class="stat-chip-sub">Physical restoration & HGH release</span>
-        </div>
-        <div class="stat-chip">
-          <span class="stat-chip-label">Sleep Efficiency</span>
-          <span class="stat-chip-val highlight-purple" id="sleep-eff-exact">--%</span>
-          <span class="stat-chip-sub">Time asleep / Time in bed</span>
+
+        <!-- Proportional Multi-Segment Stage Bar -->
+        <div class="hypnogram-bar-container">
+          <div class="hypnogram-bar">
+            <div class="hypno-seg seg-deep" id="hypno-seg-deep" style="width: 25%;" title="Deep Sleep (SWS)"></div>
+            <div class="hypno-seg seg-rem" id="hypno-seg-rem" style="width: 25%;" title="REM Sleep"></div>
+            <div class="hypno-seg seg-light" id="hypno-seg-light" style="width: 35%;" title="Light Sleep"></div>
+            <div class="hypno-seg seg-awake" id="hypno-seg-awake" style="width: 15%;" title="Awake Time"></div>
+          </div>
+          <div class="hypnogram-legend">
+            <div class="legend-item"><span class="legend-dot dot-deep"></span> Deep (SWS): <strong id="legend-deep-val">--m (--%)</strong></div>
+            <div class="legend-item"><span class="legend-dot dot-rem"></span> REM: <strong id="legend-rem-val">--m (--%)</strong></div>
+            <div class="legend-item"><span class="legend-dot dot-light"></span> Light: <strong id="legend-light-val">--m (--%)</strong></div>
+            <div class="legend-item"><span class="legend-dot dot-awake"></span> Awake: <strong id="legend-awake-val">--m</strong></div>
+          </div>
         </div>
       </div>
 
-      <!-- Sleep Architecture Breakdown Charts -->
+      <!-- 2. Four Specialized Sleep Stage Intelligence Cards -->
+      <div class="sleep-stage-cards-grid">
+        <!-- Deep Sleep (SWS) -->
+        <div class="stage-card card-deep">
+          <div class="stage-card-header">
+            <div class="stage-tag-group">
+              <span class="stage-tag tag-cyan">PHYSICAL REPAIR</span>
+              <span class="stage-optimal-chip" id="chip-deep-optimal">Target: 20-25%</span>
+            </div>
+            <span class="stage-icon">💤</span>
+          </div>
+          <div class="stage-card-metric">
+            <span class="stage-main-val" id="stage-deep-time">--</span>
+            <span class="stage-pct-val" id="stage-deep-pct">--% of sleep</span>
+          </div>
+          <h4 class="stage-title">Slow Wave Sleep (Deep / SWS)</h4>
+          <p class="stage-desc">Releases ~85% of daily Human Growth Hormone (HGH). Governs myofibrillar protein synthesis, cellular tissue restoration, and immune replenishment.</p>
+        </div>
+
+        <!-- REM Sleep -->
+        <div class="stage-card card-rem">
+          <div class="stage-card-header">
+            <div class="stage-tag-group">
+              <span class="stage-tag tag-purple">COGNITIVE RESTORATION</span>
+              <span class="stage-optimal-chip" id="chip-rem-optimal">Target: 20-25%</span>
+            </div>
+            <span class="stage-icon">🧠</span>
+          </div>
+          <div class="stage-card-metric">
+            <span class="stage-main-val" id="stage-rem-time">--</span>
+            <span class="stage-pct-val" id="stage-rem-pct">--% of sleep</span>
+          </div>
+          <h4 class="stage-title">Rapid Eye Movement (REM)</h4>
+          <p class="stage-desc">Synthesizes neuroplasticity, memory consolidation, and motor skill learning. Critical for emotional stability and central nervous system (CNS) recovery.</p>
+        </div>
+
+        <!-- Light Sleep -->
+        <div class="stage-card card-light">
+          <div class="stage-card-header">
+            <div class="stage-tag-group">
+              <span class="stage-tag tag-slate">METABOLIC TRANSITION</span>
+              <span class="stage-optimal-chip">Target: 50-55%</span>
+            </div>
+            <span class="stage-icon">🌙</span>
+          </div>
+          <div class="stage-card-metric">
+            <span class="stage-main-val" id="stage-light-time">--</span>
+            <span class="stage-pct-val" id="stage-light-pct">--% of sleep</span>
+          </div>
+          <h4 class="stage-title">Light Sleep</h4>
+          <p class="stage-desc">Acts as the essential physiological buffer between awakenings and deep sleep. Primes autonomic transition and basal metabolic stabilization.</p>
+        </div>
+
+        <!-- Awake & Disruptions -->
+        <div class="stage-card card-awake">
+          <div class="stage-card-header">
+            <div class="stage-tag-group">
+              <span class="stage-tag tag-red">FRAGMENTATION</span>
+              <span class="stage-optimal-chip" id="chip-awake-status">Continuous</span>
+            </div>
+            <span class="stage-icon">⚡</span>
+          </div>
+          <div class="stage-card-metric">
+            <span class="stage-main-val" id="stage-awake-time">--</span>
+            <span class="stage-pct-val" id="stage-awake-disturbances">-- disturbances</span>
+          </div>
+          <h4 class="stage-title">Awake & Sleep Cycles</h4>
+          <div class="stage-sub-stats">
+            <div class="sub-stat-chip">Cycles: <strong id="stage-cycles-val">--</strong></div>
+            <div class="sub-stat-chip">Time in Bed: <strong id="stage-inbed-val">--</strong></div>
+          </div>
+          <p class="stage-desc">Measures nighttime awakenings, tossing/turning, and full ~90-minute circadian sleep cycles completed throughout the sleep session.</p>
+        </div>
+      </div>
+
+      <!-- 3. Autonomic Biomarkers & Sleep Need Decomposition Grid -->
+      <div class="sleep-detail-grid">
+        <!-- Autonomic Sleep Quality Metrics -->
+        <div class="card-glass" style="padding: 24px;">
+          <div class="detail-header">
+            <span class="card-tag">AUTONOMIC SLEEP QUALITY</span>
+            <h3 style="font-family: var(--font-display); font-size: 16px; color: var(--text-primary); margin-top: 4px;">Circadian & Biometric Markers</h3>
+          </div>
+          <div class="quality-metrics-grid">
+            <div class="quality-chip">
+              <span class="quality-label">Sleep Efficiency</span>
+              <span class="quality-val highlight-green" id="sleep-eff-exact">--%</span>
+              <span class="quality-sub">Asleep vs In-Bed duration</span>
+            </div>
+            <div class="quality-chip">
+              <span class="quality-label">Sleep Consistency</span>
+              <span class="quality-val highlight-blue" id="sleep-consistency-val">--%</span>
+              <span class="quality-sub">Circadian bedtime regularity</span>
+            </div>
+            <div class="quality-chip">
+              <span class="quality-label">Respiratory Rate</span>
+              <span class="quality-val highlight-cyan" id="sleep-resp-rate-val">-- rpm</span>
+              <span class="quality-sub">Nocturnal breaths per min</span>
+            </div>
+            <div class="quality-chip">
+              <span class="quality-label">Sleep Performance</span>
+              <span class="quality-val highlight-purple" id="sleep-perf-val">--%</span>
+              <span class="quality-sub">Actual vs Needed sleep</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sleep Need vs Sleep Debt Decomposition -->
+        <div class="card-glass" style="padding: 24px;">
+          <div class="detail-header">
+            <span class="card-tag">HOMEOSTATIC SLEEP DECOMPOSITION</span>
+            <h3 style="font-family: var(--font-display); font-size: 16px; color: var(--text-primary); margin-top: 4px;">Sleep Need & Debt Breakdown</h3>
+          </div>
+          <div class="need-decomp-grid">
+            <div class="decomp-row">
+              <span class="decomp-label">Baseline Sleep Need</span>
+              <span class="decomp-val" id="sleep-baseline-need">--h --m</span>
+            </div>
+            <div class="decomp-row">
+              <span class="decomp-label">Accumulated Sleep Debt</span>
+              <span class="decomp-val highlight-red" id="sleep-debt-val">-- min</span>
+            </div>
+            <div class="decomp-row">
+              <span class="decomp-label">Recent Strain-Induced Need</span>
+              <span class="decomp-val highlight-yellow" id="sleep-strain-need">-- min</span>
+            </div>
+            <div class="decomp-row total-row">
+              <span class="decomp-label">Total Calculated Sleep Target</span>
+              <span class="decomp-val highlight-cyan" id="sleep-total-need-val">--h --m</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Filtered Sleep Trend Charts (Last 30 Days of Active Sleep Data) -->
       <div class="charts-grid" style="margin-top: 24px;">
         <div class="chart-card">
           <div class="chart-header">
             <h3>Sleep Stages Breakdown (Minutes)</h3>
-            <span class="chart-legend-indicator">Deep (SWS), REM, Light, Awake</span>
+            <span class="chart-legend-indicator">Last 30 Days • Deep (SWS), REM, Light, Awake</span>
           </div>
           <div class="chart-wrapper">
             <canvas id="sleep-stages-deep-chart"></canvas>
@@ -437,29 +581,10 @@
         <div class="chart-card">
           <div class="chart-header">
             <h3>Sleep Need vs. Actual Sleep (Hours)</h3>
-            <span class="chart-legend-indicator">Tracks sleep debt accumulated vs sleep achieved</span>
+            <span class="chart-legend-indicator">Last 30 Days • Debt Accumulated vs. Sleep Achieved</span>
           </div>
           <div class="chart-wrapper">
             <canvas id="sleep-need-chart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- Sleep Science Guide Card -->
-      <div class="card-glass" style="margin-top: 24px; padding: 24px;">
-        <h3 style="font-family: var(--font-display); font-size: 16px; margin-bottom: 10px; color: var(--whoop-cyan);">Sleep Architecture Standards for Human Performance</h3>
-        <div class="sleep-standards-grid">
-          <div class="standard-item">
-            <h4>Slow Wave Sleep (Deep / SWS)</h4>
-            <p><strong>Optimal: 20-25% of sleep (~1.5 - 2h).</strong> Triggers 85% of Human Growth Hormone (HGH), cellular repair, and muscle protein synthesis.</p>
-          </div>
-          <div class="standard-item">
-            <h4>REM Sleep (Rapid Eye Movement)</h4>
-            <p><strong>Optimal: 20-25% of sleep (~1.5 - 2h).</strong> Cognitive consolidation, emotional regulation, motor learning, and memory retention.</p>
-          </div>
-          <div class="standard-item">
-            <h4>Light Sleep</h4>
-            <p><strong>Optimal: 50-55% of sleep.</strong> Transition state aiding mental recovery and metabolism stabilization.</p>
           </div>
         </div>
       </div>
