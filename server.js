@@ -5,6 +5,8 @@ const path = require('path');
 
 const db = require('./services/db');
 const whoopService = require('./services/whoop');
+const googleHealthService = require('./services/googleHealth');
+const aiCoachService = require('./services/aiCoach');
 const analyticsService = require('./services/analytics');
 const hypertrophyService = require('./services/hypertrophy');
 const { populateDemoData } = require('./services/demoData');
@@ -59,15 +61,28 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
-// 3. Auth Status
+// 3. Auth & Multi-Wearable Status
 app.get('/api/auth/status', (req, res) => {
-  const tokens = db.getTokens();
+  const activeProvider = db.getActiveProvider();
+  const tokensWhoop = db.getTokens('whoop');
+  const tokensGoogle = db.getTokens('google_fitbit');
   const user = db.getUser();
   const biometrics = db.getBiometrics();
   const dates = Object.keys(biometrics).sort();
 
   res.json({
-    connected: !!(tokens && tokens.access_token),
+    active_provider: activeProvider,
+    connected: activeProvider === 'google_fitbit' ? !!(tokensGoogle && tokensGoogle.access_token) : !!(tokensWhoop && tokensWhoop.access_token),
+    providers: {
+      whoop: {
+        connected: !!(tokensWhoop && tokensWhoop.access_token),
+        has_data: Object.keys(db.getBiometrics(null, 'whoop')).length > 0
+      },
+      google_fitbit: {
+        connected: !!(tokensGoogle && tokensGoogle.access_token),
+        has_data: Object.keys(db.getBiometrics(null, 'google_fitbit')).length > 0
+      }
+    },
     user: user || null,
     has_data: dates.length > 0,
     total_days: dates.length,
@@ -75,22 +90,96 @@ app.get('/api/auth/status', (req, res) => {
   });
 });
 
-// 4. Disconnect WHOOP
+// 4. Disconnect Active Wearable
 app.post('/api/auth/disconnect', (req, res) => {
-  db.clearTokens();
-  res.json({ success: true, message: 'Disconnected WHOOP account' });
+  const provider = db.getActiveProvider();
+  db.clearTokens(provider);
+  res.json({ success: true, message: `Disconnected ${provider} account` });
 });
 
 // -------------------------------------------------------------
-// WHOOP Data Sync
+// Google Health / Fitbit OAuth Endpoints
 // -------------------------------------------------------------
+
+app.get('/api/auth/google/login', (req, res) => {
+  try {
+    const authUrl = googleHealthService.getAuthorizationUrl();
+    res.redirect(authUrl);
+  } catch (err) {
+    console.error('Error generating Google/Fitbit auth URL:', err);
+    res.status(500).json({ error: 'Failed to generate Google/Fitbit auth URL', details: err.message });
+  }
+});
+
+app.get('/api/auth/google/callback', async (req, res) => {
+  const { code, error, error_description } = req.query;
+
+  if (error) {
+    console.error('Google/Fitbit OAuth callback error:', error, error_description);
+    return res.redirect(`/?auth_error=${encodeURIComponent(error_description || error)}`);
+  }
+
+  if (!code) {
+    return res.redirect('/?auth_error=No_authorization_code_received');
+  }
+
+  try {
+    await googleHealthService.exchangeCodeForTokens(code);
+    db.setActiveProvider('google_fitbit');
+    try {
+      await googleHealthService.syncAllData();
+    } catch (syncErr) {
+      console.warn('Initial Google sync warning:', syncErr.message);
+    }
+    res.redirect('/?connected=google_fitbit');
+  } catch (err) {
+    console.error('Error in Google OAuth callback:', err);
+    res.redirect(`/?auth_error=${encodeURIComponent(err.message)}`);
+  }
+});
+
+// -------------------------------------------------------------
+// Wearable Provider Switching & Syncing
+// -------------------------------------------------------------
+
+app.post('/api/wearable/switch', (req, res) => {
+  const { provider } = req.body;
+  try {
+    const active = db.setActiveProvider(provider);
+    // If switching to google_fitbit and no biometrics exist yet, auto seed demo biometrics
+    if (active === 'google_fitbit' && Object.keys(db.getBiometrics(null, 'google_fitbit')).length === 0) {
+      googleHealthService.seedGoogleDemoData();
+    }
+    res.json({ success: true, active_provider: active });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 app.post('/api/whoop/sync', async (req, res) => {
   try {
-    const result = await whoopService.syncAllData();
+    const active = db.getActiveProvider();
+    let result;
+    if (active === 'google_fitbit') {
+      result = await googleHealthService.syncAllData();
+    } else {
+      result = await whoopService.syncAllData();
+    }
     res.json(result);
   } catch (err) {
     console.error('Sync failed:', err);
+    res.status(500).json({ error: 'Sync failed', message: err.message });
+  }
+});
+
+app.post('/api/wearable/sync', async (req, res) => {
+  try {
+    const active = db.getActiveProvider();
+    const result = active === 'google_fitbit'
+      ? await googleHealthService.syncAllData()
+      : await whoopService.syncAllData();
+    res.json(result);
+  } catch (err) {
     res.status(500).json({ error: 'Sync failed', message: err.message });
   }
 });
@@ -100,6 +189,7 @@ app.post('/api/whoop/sync', async (req, res) => {
 // -------------------------------------------------------------
 
 app.get('/api/data', (req, res) => {
+  const provider = db.getActiveProvider();
   const biometrics = db.getBiometrics();
   const dates = Object.keys(biometrics).sort();
 
@@ -112,6 +202,8 @@ app.get('/api/data', (req, res) => {
   const latest = latestDate ? { date: latestDate, ...biometrics[latestDate] } : null;
 
   res.json({
+    provider,
+    user: db.getUser(),
     latest,
     history,
     total_days: dates.length
@@ -240,6 +332,62 @@ app.post('/api/demo/clear', (req, res) => {
     habit_logs: {}
   });
   res.json({ success: true, message: 'Cleared all biometric and habit data' });
+});
+
+// -------------------------------------------------------------
+// Apex AI Physiological Copilot Endpoints
+// -------------------------------------------------------------
+
+app.get('/api/ai/coach/insights', (req, res) => {
+  try {
+    const date = req.query.date;
+    const biometrics = db.getBiometrics();
+    const dates = Object.keys(biometrics).sort();
+    const history = dates.map(d => ({ date: d, ...biometrics[d] }));
+
+    let targetRecord = null;
+    if (date && biometrics[date]) {
+      targetRecord = { date, ...biometrics[date] };
+    } else if (dates.length > 0) {
+      const latestDate = dates[dates.length - 1];
+      targetRecord = { date: latestDate, ...biometrics[latestDate] };
+    }
+
+    if (!targetRecord) {
+      return res.status(404).json({ error: 'No biometric record found to analyze' });
+    }
+
+    const insights = aiCoachService.analyzeVitals(targetRecord, history);
+    res.json({ success: true, insights });
+  } catch (err) {
+    console.error('Error generating AI coach insights:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/ai/coach/chat', async (req, res) => {
+  try {
+    const { prompt, date } = req.body;
+    if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
+
+    const biometrics = db.getBiometrics();
+    const dates = Object.keys(biometrics).sort();
+    const history = dates.map(d => ({ date: d, ...biometrics[d] }));
+
+    let targetRecord = null;
+    if (date && biometrics[date]) {
+      targetRecord = { date, ...biometrics[date] };
+    } else if (dates.length > 0) {
+      const latestDate = dates[dates.length - 1];
+      targetRecord = { date: latestDate, ...biometrics[latestDate] };
+    }
+
+    const response = await aiCoachService.chatWithCoach(prompt, targetRecord || {}, history);
+    res.json({ success: true, ...response });
+  } catch (err) {
+    console.error('Error in AI coach chat:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Start Server

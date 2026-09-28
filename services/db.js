@@ -63,15 +63,28 @@ class DB {
         if (!parsed.habits || parsed.habits.length === 0) {
           parsed.habits = DEFAULT_HABITS;
         }
+        if (!parsed.provider) {
+          parsed.provider = 'whoop';
+        }
+        if (!parsed.biometrics_google) {
+          parsed.biometrics_google = {};
+        }
+        if (!parsed.tokens_google) {
+          parsed.tokens_google = null;
+        }
         return parsed;
       } catch (e) {
         console.error('Error reading db file, reinitializing', e);
       }
     }
     const initial = {
+      provider: 'whoop', // 'whoop' | 'google_fitbit'
       tokens: null,
+      tokens_google: null,
       user: null,
-      biometrics: {}, // date string (YYYY-MM-DD) -> biometric record
+      user_google: null,
+      biometrics: {}, // date string (YYYY-MM-DD) -> WHOOP biometric record
+      biometrics_google: {}, // date string (YYYY-MM-DD) -> Google/Fitbit biometric record
       habits: DEFAULT_HABITS,
       habit_logs: {} // date string (YYYY-MM-DD) -> { [habitId]: boolean }
     };
@@ -90,51 +103,96 @@ class DB {
     return this.load();
   }
 
-  // Token management
-  getTokens() {
-    return this.load().tokens;
+  // Provider management
+  getActiveProvider() {
+    return this.load().provider || 'whoop';
   }
 
-  saveTokens(tokens) {
-    this.data.tokens = tokens;
+  setActiveProvider(provider) {
+    if (provider !== 'whoop' && provider !== 'google_fitbit') {
+      throw new Error(`Unsupported provider: ${provider}`);
+    }
+    this.data.provider = provider;
+    this.save();
+    return this.data.provider;
+  }
+
+  // Token management
+  getTokens(provider = this.getActiveProvider()) {
+    const data = this.load();
+    return provider === 'google_fitbit' ? data.tokens_google : data.tokens;
+  }
+
+  saveTokens(tokens, provider = this.getActiveProvider()) {
+    if (provider === 'google_fitbit') {
+      this.data.tokens_google = tokens;
+    } else {
+      this.data.tokens = tokens;
+    }
     this.save();
   }
 
-  clearTokens() {
-    this.data.tokens = null;
+  clearTokens(provider = this.getActiveProvider()) {
+    if (provider === 'google_fitbit') {
+      this.data.tokens_google = null;
+    } else {
+      this.data.tokens = null;
+    }
     this.save();
   }
 
   // User info
-  getUser() {
-    return this.load().user;
+  getUser(provider = this.getActiveProvider()) {
+    const data = this.load();
+    if (provider === 'google_fitbit') {
+      return data.user_google || {
+        first_name: data.user?.first_name || 'Hruthik',
+        last_name: data.user?.last_name || 'Sreeperumbudur',
+        device: 'Google Pixel Watch / Fitbit Sense 2',
+        body: data.user?.body || { weight_kilogram: 78.5, height_meter: 1.70, max_heart_rate: 190 }
+      };
+    }
+    return data.user;
   }
 
-  saveUser(user) {
-    this.data.user = user;
+  saveUser(user, provider = this.getActiveProvider()) {
+    if (provider === 'google_fitbit') {
+      this.data.user_google = user;
+    } else {
+      this.data.user = user;
+    }
     this.save();
   }
 
   // Biometrics
-  getBiometrics(date) {
-    const bios = this.load().biometrics || {};
+  getBiometrics(date, provider = this.getActiveProvider()) {
+    const data = this.load();
+    const bios = provider === 'google_fitbit' ? (data.biometrics_google || {}) : (data.biometrics || {});
     if (date) return bios[date] || null;
     return bios;
   }
 
-  saveBiometrics(date, record) {
-    this.data.biometrics[date] = {
-      ...(this.data.biometrics[date] || {}),
+  saveBiometrics(date, record, provider = this.getActiveProvider()) {
+    const targetMap = provider === 'google_fitbit'
+      ? (this.data.biometrics_google = this.data.biometrics_google || {})
+      : (this.data.biometrics = this.data.biometrics || {});
+
+    targetMap[date] = {
+      ...(targetMap[date] || {}),
       ...record,
       updated_at: new Date().toISOString()
     };
     this.save();
   }
 
-  saveBulkBiometrics(recordsMap) {
+  saveBulkBiometrics(recordsMap, provider = this.getActiveProvider()) {
+    const targetMap = provider === 'google_fitbit'
+      ? (this.data.biometrics_google = this.data.biometrics_google || {})
+      : (this.data.biometrics = this.data.biometrics || {});
+
     for (const [date, record] of Object.entries(recordsMap)) {
-      this.data.biometrics[date] = {
-        ...(this.data.biometrics[date] || {}),
+      targetMap[date] = {
+        ...(targetMap[date] || {}),
         ...record,
         updated_at: new Date().toISOString()
       };

@@ -2836,6 +2836,446 @@ body {
   color: #FFFFFF;
 }
 
+/* ========================================================================= */
+/* Multi-Wearable Provider Switcher */
+/* ========================================================================= */
+.wearable-switcher-pill {
+  display: flex;
+  background: #181B22;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.wearable-pill-btn {
+  background: transparent;
+  border: none;
+  color: #94A3B8;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+
+.wearable-pill-btn:hover {
+  color: #FFFFFF;
+}
+
+.wearable-pill-btn.active {
+  background: #2D323E;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.wearable-pill-btn.active[data-provider="google_fitbit"] {
+  background: rgba(0, 240, 118, 0.15);
+  color: #00F076;
+}
+
+/* ========================================================================= */
+/* Apex AI Physiological Copilot Section */
+/* ========================================================================= */
+.card-ai-copilot {
+  background: linear-gradient(135deg, #1A1D24 0%, #14171E 100%);
+  border: 1px solid rgba(48, 110, 232, 0.25);
+  border-radius: 24px;
+  padding: 26px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden;
+}
+
+.card-ai-copilot::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, #306EE8, #00F076, #A855F7);
+}
+
+.ai-copilot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.ai-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ai-model-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(48, 110, 232, 0.14);
+  color: #60A5FA;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(48, 110, 232, 0.28);
+}
+
+.ai-copilot-heading {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  color: #FFFFFF;
+}
+
+.ai-copilot-sub {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+.stress-status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  letter-spacing: 0.5px;
+}
+
+.ai-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.ai-insight-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ai-insight-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.ai-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ai-card-title-row h4 {
+  font-family: var(--font-display);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.ai-card-metric-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.stress-score-badge {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(0, 240, 118, 0.12);
+  color: #00F076;
+}
+
+.stress-delta-text {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.protocol-title {
+  font-size: 13.5px;
+  color: #60A5FA;
+}
+
+.protocol-duration-chip {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.sleep-work-target {
+  font-size: 13.5px;
+  color: #C084FC;
+}
+
+.sleep-work-impact {
+  font-size: 11px;
+  color: #00E5FF;
+  background: rgba(0, 229, 255, 0.08);
+  padding: 2px 7px;
+  border-radius: 6px;
+}
+
+.ai-card-body-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.btn-start-pacer {
+  margin-top: auto;
+  padding: 9px 14px;
+  border-radius: 12px;
+  background: rgba(48, 110, 232, 0.14);
+  border: 1px solid rgba(48, 110, 232, 0.35);
+  color: #60A5FA;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.btn-start-pacer:hover {
+  background: #306EE8;
+  color: #FFFFFF;
+  transform: translateY(-1px);
+}
+
+/* AI Prompt & Chat Bar */
+.ai-interaction-bar {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 18px;
+}
+
+.ai-prompt-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.prompt-pill-label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.ai-prompt-pill {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #94A3B8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ai-prompt-pill:hover {
+  background: rgba(48, 110, 232, 0.14);
+  color: #60A5FA;
+  border-color: rgba(48, 110, 232, 0.4);
+}
+
+.ai-chat-input-wrapper {
+  display: flex;
+  gap: 10px;
+}
+
+.ai-chat-input {
+  flex: 1;
+  background: #111318;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 13px;
+  color: #FFFFFF;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ai-chat-input:focus {
+  border-color: #306EE8;
+  box-shadow: 0 0 14px rgba(48, 110, 232, 0.28);
+}
+
+.btn-ai-send {
+  background: #306EE8;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 14px;
+  padding: 0 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.2s;
+}
+
+.btn-ai-send:hover {
+  background: #2558c4;
+}
+
+.ai-chat-response-box {
+  margin-top: 14px;
+  background: #111318;
+  border: 1px solid rgba(48, 110, 232, 0.35);
+  border-radius: 16px;
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #E2E8F0;
+  animation: fadeIn 0.3s ease;
+}
+
+.ai-response-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.response-tag {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #60A5FA;
+}
+
+.btn-close-response {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* ========================================================================= */
+/* Guided Breathing Pacer Modal */
+/* ========================================================================= */
+.pacer-modal-card {
+  max-width: 460px;
+  width: 90%;
+  background: #111318;
+  border: 1px solid rgba(48, 110, 232, 0.35);
+  border-radius: 28px;
+  padding: 30px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pacer-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  text-align: left;
+}
+
+.pacer-animation-container {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 28px auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pacer-outer-glow {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(48, 110, 232, 0.25) 0%, transparent 70%);
+  animation: pulseGlow 4s infinite ease-in-out;
+}
+
+.pacer-circle {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(48, 110, 232, 0.2), rgba(0, 240, 118, 0.15));
+  border: 2px solid #306EE8;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 20px rgba(48, 110, 232, 0.3);
+  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pacer-phase-text {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.pacer-timer-number {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 800;
+  color: #60A5FA;
+  margin-top: 2px;
+}
+
+.pacer-instructions-box {
+  margin-bottom: 22px;
+}
+
+.pacer-cycle-tracker {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pacer-cycle-tracker strong {
+  color: #FFFFFF;
+}
+
+.pacer-controls-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.4; transform: scale(0.95); }
+  50% { opacity: 0.9; transform: scale(1.05); }
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .header-container {

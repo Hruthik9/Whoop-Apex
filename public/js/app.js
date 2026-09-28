@@ -11,13 +11,25 @@ let state = {
   currentTab: 'overview',
   currentGoal: 'gain',
   auth: { connected: false, user: null, has_data: false },
+  activeProvider: 'whoop',
   data: { latest: null, history: [] },
   habits: [],
   catalog: [],
   dailyLogs: {},
   correlations: null,
   hypertrophy: null,
-  charts: {}
+  charts: {},
+  aiInsights: null,
+  pacer: {
+    active: false,
+    paused: false,
+    intervalId: null,
+    protocol: null,
+    phaseIndex: 0,
+    secondsLeft: 0,
+    currentCycle: 1,
+    totalCycles: 25
+  }
 };
 
 // -------------------------------------------------------------
@@ -32,6 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadHabitCatalog();
   await loadCorrelations();
   await loadHypertrophyData();
+  await loadAICoachInsights();
 });
 
 function checkQueryParams() {
@@ -46,13 +59,17 @@ function checkQueryParams() {
     banner.classList.remove('hidden');
     banner.style.borderColor = 'rgba(0, 240, 118, 0.4)';
     banner.style.background = 'rgba(0, 240, 118, 0.15)';
-    message.textContent = 'Successfully connected to WHOOP. Live biometrics have been synced.';
+    if (connected === 'google_fitbit') {
+      message.textContent = 'Successfully connected to Google Health / Fitbit. Live biometrics have been synced.';
+    } else {
+      message.textContent = 'Successfully connected to WHOOP. Live biometrics have been synced.';
+    }
     window.history.replaceState({}, document.title, window.location.pathname);
   } else if (authError) {
     banner.classList.remove('hidden');
     banner.style.borderColor = 'rgba(255, 59, 48, 0.4)';
     banner.style.background = 'rgba(255, 59, 48, 0.15)';
-    message.textContent = `WHOOP Authentication Error: ${authError}`;
+    message.textContent = `Authentication Error: ${authError}`;
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 }
@@ -80,21 +97,105 @@ function initEventListeners() {
     updateDateDisplay();
     await loadHabitsAndLogs();
     await loadHypertrophyData();
+    await loadAICoachInsights();
     updateAllViews();
   });
 
+  // Wearable Provider Switcher Buttons
+  const btnWearableWhoop = document.getElementById('btn-wearable-whoop');
+  if (btnWearableWhoop) {
+    btnWearableWhoop.addEventListener('click', async () => {
+      if (state.activeProvider !== 'whoop') {
+        await switchWearableProvider('whoop');
+      }
+    });
+  }
+
+  const btnWearableGoogle = document.getElementById('btn-wearable-google');
+  if (btnWearableGoogle) {
+    btnWearableGoogle.addEventListener('click', async () => {
+      if (state.activeProvider !== 'google_fitbit') {
+        await switchWearableProvider('google_fitbit');
+      }
+    });
+  }
+
   // Action Buttons
   document.getElementById('btn-connect').addEventListener('click', () => {
-    window.location.href = '/api/auth/login';
+    if (state.activeProvider === 'google_fitbit') {
+      window.location.href = '/api/auth/google/login';
+    } else {
+      window.location.href = '/api/auth/login';
+    }
   });
 
   document.getElementById('btn-sync').addEventListener('click', async () => {
-    await syncWhoopData();
+    await syncWearableData();
   });
 
   document.getElementById('btn-demo').addEventListener('click', async () => {
     await populateDemoData();
   });
+
+  // Apex AI Coach Interaction Listeners
+  const formAiChat = document.getElementById('form-ai-coach-chat');
+  if (formAiChat) {
+    formAiChat.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('ai-coach-input');
+      const prompt = input ? input.value.trim() : '';
+      if (!prompt) return;
+      await handleAICoachQuery(prompt);
+      if (input) input.value = '';
+    });
+  }
+
+  const promptPills = document.querySelectorAll('.ai-prompt-pill');
+  promptPills.forEach(pill => {
+    pill.addEventListener('click', async () => {
+      const prompt = pill.getAttribute('data-prompt');
+      const input = document.getElementById('ai-coach-input');
+      if (input) input.value = prompt;
+      await handleAICoachQuery(prompt);
+    });
+  });
+
+  const btnCloseAiResponse = document.getElementById('btn-close-ai-response');
+  if (btnCloseAiResponse) {
+    btnCloseAiResponse.addEventListener('click', () => {
+      const box = document.getElementById('ai-chat-response-box');
+      if (box) box.classList.add('hidden');
+    });
+  }
+
+  // Guided Breathing Pacer Modal Listeners
+  const btnOpenPacer = document.getElementById('btn-open-breath-pacer');
+  if (btnOpenPacer) {
+    btnOpenPacer.addEventListener('click', () => {
+      openBreathingPacer();
+    });
+  }
+
+  const btnClosePacer = document.getElementById('btn-close-pacer');
+  if (btnClosePacer) {
+    btnClosePacer.addEventListener('click', () => {
+      closeBreathingPacer();
+    });
+  }
+
+  const btnFinishPacer = document.getElementById('btn-pacer-finish');
+  if (btnFinishPacer) {
+    btnFinishPacer.addEventListener('click', () => {
+      closeBreathingPacer();
+    });
+  }
+
+  const btnTogglePacer = document.getElementById('btn-pacer-toggle');
+  if (btnTogglePacer) {
+    btnTogglePacer.addEventListener('click', () => {
+      toggleBreathingPacer();
+    });
+  }
 
   const btnDismissAlert = document.getElementById('btn-dismiss-alert');
   if (btnDismissAlert) {
@@ -324,24 +425,48 @@ async function loadAuthStatus() {
     const res = await fetch('/api/auth/status');
     const auth = await res.json();
     state.auth = auth;
+    state.activeProvider = auth.active_provider || 'whoop';
+
+    // Update switcher pill buttons
+    const btnWhoop = document.getElementById('btn-wearable-whoop');
+    const btnGoogle = document.getElementById('btn-wearable-google');
+    if (btnWhoop && btnGoogle) {
+      if (state.activeProvider === 'google_fitbit') {
+        btnGoogle.classList.add('active');
+        btnWhoop.classList.remove('active');
+      } else {
+        btnWhoop.classList.add('active');
+        btnGoogle.classList.remove('active');
+      }
+    }
 
     const pill = document.getElementById('connection-status-pill');
     const text = document.getElementById('connection-status-text');
     const btnConnect = document.getElementById('btn-connect');
+    const isConnected = auth.connected;
+    const providerName = state.activeProvider === 'google_fitbit' ? 'Fitbit' : 'WHOOP';
 
-    if (auth.connected) {
+    if (isConnected) {
       pill.className = 'status-pill status-connected';
-      text.textContent = auth.user ? (auth.user.first_name || 'Connected') : 'Connected';
-      btnConnect.textContent = 'WHOOP Linked';
+      text.textContent = auth.user ? (auth.user.first_name || `${providerName} Linked`) : `${providerName} Linked`;
+      btnConnect.textContent = `${providerName} Linked`;
       btnConnect.style.background = 'rgba(0, 240, 118, 0.15)';
       btnConnect.style.color = '#00F076';
       btnConnect.style.border = '1px solid rgba(0, 240, 118, 0.3)';
     } else if (auth.has_data) {
       pill.className = 'status-pill status-demo';
-      text.textContent = 'Demo Mode';
+      text.textContent = `${providerName} Demo`;
+      btnConnect.textContent = `Connect ${providerName}`;
+      btnConnect.style.background = '';
+      btnConnect.style.color = '';
+      btnConnect.style.border = '';
     } else {
       pill.className = 'status-pill status-disconnected';
       text.textContent = 'Disconnected';
+      btnConnect.textContent = `Connect ${providerName}`;
+      btnConnect.style.background = '';
+      btnConnect.style.color = '';
+      btnConnect.style.border = '';
     }
 
     if (auth.latest_date && !state.selectedDate) {
@@ -372,6 +497,7 @@ async function loadDashboardData() {
     }
 
     updateAllViews();
+    await loadAICoachInsights();
   } catch (err) {
     console.error('Error loading dashboard data:', err);
   }
@@ -637,6 +763,7 @@ function updateAllViews() {
   updateRecoveryLabView(dayRecord);
   updateSleepArchitectureView(dayRecord);
   updateStrainWorkoutsView(dayRecord);
+  renderAICoachInsights(state.aiInsights);
   renderAllCharts();
 }
 
@@ -1842,5 +1969,361 @@ function renderAllCharts() {
         plugins: { legend: { display: false } }
       }
     });
+  }
+}
+
+// -------------------------------------------------------------
+// Multi-Wearable Provider & Sync Operations
+// -------------------------------------------------------------
+
+async function switchWearableProvider(provider) {
+  try {
+    const res = await fetch('/api/wearable/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider })
+    });
+    const result = await res.json();
+    if (result.success) {
+      state.activeProvider = result.active_provider;
+      await loadAuthStatus();
+      await loadDashboardData();
+      await loadHabitsAndLogs();
+      await loadCorrelations();
+      await loadHypertrophyData();
+      await loadAICoachInsights();
+    }
+  } catch (err) {
+    console.error('Error switching wearable provider:', err);
+  }
+}
+
+async function syncWearableData() {
+  const btn = document.getElementById('btn-sync');
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '<span>Syncing...</span>';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/wearable/sync', { method: 'POST' });
+    const result = await res.json();
+    if (res.ok) {
+      await loadDashboardData();
+      await loadCorrelations();
+      await loadHypertrophyData();
+      await loadAICoachInsights();
+      const pName = state.activeProvider === 'google_fitbit' ? 'Fitbit / Google Health' : 'WHOOP';
+      alert(`Synced ${result.synced_days || 30} days of ${pName} data!`);
+    } else {
+      alert(`Sync failed: ${result.message || 'Check your wearable connection.'}`);
+    }
+  } catch (err) {
+    alert(`Sync error: ${err.message}`);
+  } finally {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+}
+
+// -------------------------------------------------------------
+// Apex AI Physiological Copilot Operations
+// -------------------------------------------------------------
+
+async function loadAICoachInsights() {
+  try {
+    const res = await fetch(`/api/ai/coach/insights?date=${state.selectedDate}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.success && data.insights) {
+      state.aiInsights = data.insights;
+      renderAICoachInsights(data.insights);
+    }
+  } catch (err) {
+    console.error('Error fetching AI coach insights:', err);
+  }
+}
+
+function renderAICoachInsights(insights) {
+  if (!insights) return;
+
+  // Engine model tag
+  const elModel = document.getElementById('ai-engine-tag');
+  if (elModel && insights.model) {
+    elModel.textContent = `⚡ ${insights.model}`;
+  }
+
+  // Vitals timestamp subtext
+  const elTimestamp = document.getElementById('ai-vitals-timestamp');
+  if (elTimestamp && insights.vitals) {
+    const hrv = insights.vitals.hrv ? `${insights.vitals.hrv}ms` : '--';
+    const rhr = insights.vitals.rhr ? `${insights.vitals.rhr}bpm` : '--';
+    const rec = insights.vitals.recovery ? `${insights.vitals.recovery}%` : '--';
+    elTimestamp.textContent = `Analyzing ${insights.date || state.selectedDate} • HRV: ${hrv} • RHR: ${rhr} • Recovery: ${rec}`;
+  }
+
+  // Stress Status Pill & Details
+  if (insights.stress) {
+    const elStressPill = document.getElementById('ai-stress-pill');
+    const elStressDot = document.getElementById('ai-stress-dot');
+    const elStressLabel = document.getElementById('ai-stress-label');
+    const elStressScore = document.getElementById('ai-stress-score');
+    const elHrvDelta = document.getElementById('ai-hrv-delta');
+    const elStressDetails = document.getElementById('ai-stress-details');
+
+    const score = insights.stress.score !== undefined ? insights.stress.score : 3;
+    const label = insights.stress.title || insights.stress.label || insights.stress.state || (score <= 3 ? 'Parasympathetic Equilibrium' : 'Autonomic Alert');
+    const details = insights.stress.details || insights.stress.summary || '';
+    const hrvDelta = insights.stress.hrv_delta_pct !== undefined ? insights.stress.hrv_delta_pct : (insights.stress.hrvDeltaPct || 0);
+
+    let color = '#00F076';
+    if (score >= 8) color = '#FF3B30';
+    else if (score >= 6) color = '#FF9F0A';
+    else if (score >= 4) color = '#FFDE37';
+
+    if (elStressLabel) elStressLabel.textContent = label.toUpperCase();
+    if (elStressScore) elStressScore.textContent = `Score: ${score}/10`;
+
+    if (elHrvDelta) {
+      const deltaSign = hrvDelta >= 0 ? '+' : '';
+      elHrvDelta.textContent = `HRV: ${deltaSign}${hrvDelta}% vs 7d Baseline`;
+      elHrvDelta.style.color = hrvDelta >= 0 ? '#00F076' : '#FF9F0A';
+    }
+
+    if (elStressDetails) elStressDetails.textContent = details;
+
+    if (elStressPill) {
+      elStressPill.style.borderColor = `${color}55`;
+      elStressPill.style.background = `${color}15`;
+    }
+    if (elStressDot) {
+      elStressDot.className = 'status-dot';
+      elStressDot.style.background = color;
+      elStressDot.style.boxShadow = `0 0 10px ${color}`;
+    }
+  }
+
+  // Breathwork Prescription Card
+  if (insights.breathwork) {
+    const elName = document.getElementById('ai-breath-name');
+    const elDuration = document.getElementById('ai-breath-duration');
+    const elDesc = document.getElementById('ai-breath-desc');
+
+    const durationText = insights.breathwork.duration || 
+      (insights.breathwork.duration_min ? `${insights.breathwork.duration_min} min • ${insights.breathwork.cycles || 12} cycles` : '5 min • 25 cycles');
+
+    if (elName) elName.textContent = insights.breathwork.name;
+    if (elDuration) elDuration.textContent = durationText;
+    if (elDesc) elDesc.textContent = insights.breathwork.instructions;
+
+    state.pacer.protocol = insights.breathwork;
+  }
+
+  // Sleep Work Card
+  const sleepWork = Array.isArray(insights.sleep_work) ? insights.sleep_work[0] : (insights.sleepWork || null);
+  if (sleepWork) {
+    const elTarget = document.getElementById('ai-sleep-target');
+    const elImpact = document.getElementById('ai-sleep-impact');
+    const elAction = document.getElementById('ai-sleep-action');
+
+    if (elTarget) elTarget.textContent = sleepWork.target;
+    if (elImpact) elImpact.textContent = sleepWork.impact || sleepWork.expectedImpact || '';
+    if (elAction) elAction.textContent = sleepWork.action || sleepWork.actionProtocol || '';
+  }
+}
+
+async function handleAICoachQuery(prompt) {
+  const box = document.getElementById('ai-chat-response-box');
+  const content = document.getElementById('ai-response-content');
+  if (!box || !content) return;
+
+  box.classList.remove('hidden');
+  content.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 13px; padding: 14px 0;">
+      <span class="status-dot dot-green" style="animation: pulse 1s infinite alternate; width: 10px; height: 10px;"></span>
+      <span>Consulting Apex AI Physiological Engine & synthesizing biometrics...</span>
+    </div>
+  `;
+
+  try {
+    const res = await fetch('/api/ai/coach/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, date: state.selectedDate })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      content.innerHTML = `<p style="color: #FF3B30;">Error: ${data.error || 'Failed to generate physiological assessment'}</p>`;
+      return;
+    }
+
+    let formatted = data.reply
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^### (.*$)/gim, '<h4 style="color: #FFFFFF; font-size: 14px; margin: 12px 0 6px 0; font-family: var(--font-display);">$1</h4>')
+      .replace(/^## (.*$)/gim, '<h3 style="color: #FFFFFF; font-size: 15px; margin: 14px 0 8px 0; font-family: var(--font-display);">$1</h3>')
+      .replace(/^\s*[-•]\s+(.*$)/gim, '<li style="margin-bottom: 4px; color: #CBD5E1;">$1</li>')
+      .replace(/\n\n+/g, '</p><p style="margin-bottom: 10px; color: #94A3B8; line-height: 1.55;">')
+      .replace(/\n/g, '<br>');
+
+    if (formatted.includes('<li')) {
+      formatted = formatted.replace(/(<li.*<\/li>)/s, '<ul style="padding-left: 20px; margin: 8px 0 12px 0;">$1</ul>');
+    }
+
+    const sourceTag = data.source === 'gemini-2.5-flash'
+      ? '<span style="display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(48,110,232,0.2); color:#60A5FA; border:1px solid rgba(48,110,232,0.4); margin-bottom:8px;">⚡ Gemini 2.5 Flash Verified</span>'
+      : '<span style="display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(0,240,118,0.15); color:#00F076; border:1px solid rgba(0,240,118,0.3); margin-bottom:8px;">⚡ Apex Clinical Physiological Engine</span>';
+
+    content.innerHTML = `
+      <div style="margin-bottom: 8px;">${sourceTag}</div>
+      <div style="font-size: 13.5px; line-height: 1.6; color: #E2E8F0;">
+        <p style="margin-bottom: 8px;">${formatted}</p>
+      </div>
+    `;
+
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (err) {
+    content.innerHTML = `<p style="color: #FF3B30;">Network error: ${err.message}</p>`;
+  }
+}
+
+// -------------------------------------------------------------
+// Guided Breathing Pacer Engine
+// -------------------------------------------------------------
+
+function getPacerPhasesForProtocol(protocolName) {
+  const name = (protocolName || '').toLowerCase();
+  if (name.includes('4-7-8') || name.includes('vagal')) {
+    return [
+      { name: 'Inhale Nose', duration: 4, scale: 1.4, glow: 0.5, instruction: 'Inhale quietly through nose' },
+      { name: 'Hold Breath', duration: 7, scale: 1.4, glow: 0.7, instruction: 'Hold breath steadily' },
+      { name: 'Whoosh Exhale', duration: 8, scale: 0.85, glow: 0.2, instruction: 'Exhale completely with whoosh sound' }
+    ];
+  } else if (name.includes('box') || name.includes('4-4-4-4')) {
+    return [
+      { name: 'Inhale', duration: 4, scale: 1.35, glow: 0.5, instruction: 'Inhale smooth and even' },
+      { name: 'Hold Full', duration: 4, scale: 1.35, glow: 0.6, instruction: 'Hold breath comfortably' },
+      { name: 'Exhale', duration: 4, scale: 0.85, glow: 0.2, instruction: 'Smooth, even exhale' },
+      { name: 'Hold Empty', duration: 4, scale: 0.85, glow: 0.3, instruction: 'Hold breath lungs empty' }
+    ];
+  } else {
+    // Default: Cyclic Physiological Sigh
+    return [
+      { name: 'Inhale Nose', duration: 2, scale: 1.25, glow: 0.4, instruction: 'Inhale deeply through your nose' },
+      { name: 'Top-Off Sip', duration: 1, scale: 1.48, glow: 0.8, instruction: 'Take a second quick sip of air at the top' },
+      { name: 'Slow Sigh Out', duration: 6, scale: 0.85, glow: 0.15, instruction: 'Slowly sigh all air out through your mouth' }
+    ];
+  }
+}
+
+function openBreathingPacer() {
+  const modal = document.getElementById('modal-breath-pacer');
+  if (!modal) return;
+
+  const protocol = state.pacer.protocol || { name: 'Cyclic Physiological Sigh', instructions: 'Two quick inhales through the nose followed by a slow, passive sigh out through the mouth.' };
+  const phases = getPacerPhasesForProtocol(protocol.name);
+
+  state.pacer.phases = phases;
+  state.pacer.phaseIndex = 0;
+  state.pacer.currentCycle = 1;
+  state.pacer.totalCycles = protocol.name.includes('4-7-8') ? 8 : (protocol.name.includes('box') ? 12 : 25);
+  state.pacer.secondsLeft = phases[0].duration;
+  state.pacer.paused = false;
+  state.pacer.active = true;
+
+  const elTitle = document.getElementById('pacer-protocol-title');
+  const elInst = document.getElementById('pacer-instructions');
+  const elCurCycle = document.getElementById('pacer-current-cycle');
+  const elTotCycles = document.getElementById('pacer-total-cycles');
+  const btnToggle = document.getElementById('btn-pacer-toggle');
+
+  if (elTitle) elTitle.textContent = protocol.name;
+  if (elInst) elInst.textContent = phases[0].instruction;
+  if (elCurCycle) elCurCycle.textContent = '1';
+  if (elTotCycles) elTotCycles.textContent = state.pacer.totalCycles;
+  if (btnToggle) btnToggle.textContent = 'Pause';
+
+  modal.classList.remove('hidden');
+  applyPacerPhaseUI(phases[0]);
+
+  if (state.pacer.intervalId) clearInterval(state.pacer.intervalId);
+  state.pacer.intervalId = setInterval(tickPacer, 1000);
+}
+
+function closeBreathingPacer() {
+  const modal = document.getElementById('modal-breath-pacer');
+  if (modal) modal.classList.add('hidden');
+
+  if (state.pacer.intervalId) {
+    clearInterval(state.pacer.intervalId);
+    state.pacer.intervalId = null;
+  }
+  state.pacer.active = false;
+  state.pacer.paused = false;
+
+  const circle = document.getElementById('pacer-circle');
+  if (circle) {
+    circle.style.transform = 'scale(1)';
+  }
+}
+
+function toggleBreathingPacer() {
+  const btnToggle = document.getElementById('btn-pacer-toggle');
+  if (state.pacer.paused) {
+    state.pacer.paused = false;
+    if (btnToggle) btnToggle.textContent = 'Pause';
+  } else {
+    state.pacer.paused = true;
+    if (btnToggle) btnToggle.textContent = 'Resume';
+  }
+}
+
+function applyPacerPhaseUI(phase) {
+  const elPhase = document.getElementById('pacer-phase');
+  const elTimer = document.getElementById('pacer-timer');
+  const elInst = document.getElementById('pacer-instructions');
+  const circle = document.getElementById('pacer-circle');
+  const glow = document.getElementById('pacer-glow');
+
+  if (elPhase) elPhase.textContent = phase.name;
+  if (elTimer) elTimer.textContent = state.pacer.secondsLeft;
+  if (elInst) elInst.textContent = phase.instruction;
+
+  if (circle) {
+    circle.style.transition = `transform ${phase.duration}s cubic-bezier(0.4, 0, 0.2, 1)`;
+    circle.style.transform = `scale(${phase.scale})`;
+  }
+  if (glow) {
+    glow.style.opacity = phase.glow;
+  }
+}
+
+function tickPacer() {
+  if (!state.pacer.active || state.pacer.paused) return;
+
+  state.pacer.secondsLeft -= 1;
+  const elTimer = document.getElementById('pacer-timer');
+  if (elTimer) elTimer.textContent = Math.max(0, state.pacer.secondsLeft);
+
+  if (state.pacer.secondsLeft <= 0) {
+    state.pacer.phaseIndex += 1;
+    if (state.pacer.phaseIndex >= state.pacer.phases.length) {
+      state.pacer.phaseIndex = 0;
+      state.pacer.currentCycle += 1;
+      const elCurCycle = document.getElementById('pacer-current-cycle');
+      if (elCurCycle) elCurCycle.textContent = state.pacer.currentCycle;
+
+      if (state.pacer.currentCycle > state.pacer.totalCycles) {
+        closeBreathingPacer();
+        alert('🎉 Guided Breathing Protocol Complete! Autonomic tone down-regulated.');
+        return;
+      }
+    }
+
+    const nextPhase = state.pacer.phases[state.pacer.phaseIndex];
+    state.pacer.secondsLeft = nextPhase.duration;
+    applyPacerPhaseUI(nextPhase);
   }
 }

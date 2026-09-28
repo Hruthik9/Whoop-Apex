@@ -43,6 +43,18 @@
 
       <!-- Shell Right Controls -->
       <div class="shell-actions">
+        <!-- Wearable Provider Switcher -->
+        <div class="wearable-switcher-pill" id="wearable-switcher" role="group" aria-label="Select Wearable Provider">
+          <button type="button" class="wearable-pill-btn active" data-provider="whoop" id="btn-wearable-whoop" title="Switch to WHOOP 4.0">
+            <span class="wearable-icon">⚡</span>
+            <span class="wearable-name">WHOOP</span>
+          </button>
+          <button type="button" class="wearable-pill-btn" data-provider="google_fitbit" id="btn-wearable-google" title="Switch to Google Fitbit / Pixel Watch">
+            <span class="wearable-icon">🟢</span>
+            <span class="wearable-name">Fitbit</span>
+          </button>
+        </div>
+
         <div class="date-picker-wrapper">
           <label for="date-selector" class="sr-only">Select Date</label>
           <input type="date" id="date-selector" class="date-input" aria-label="Select Date">
@@ -53,10 +65,10 @@
           <span id="connection-status-text">Disconnected</span>
         </div>
 
-        <button id="btn-sync" class="action-circle-btn" title="Sync latest data from WHOOP API">
+        <button id="btn-sync" class="action-circle-btn" title="Sync latest data from wearable API">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
         </button>
-        <button id="btn-connect" class="btn btn-primary" title="Connect to WHOOP Developer API" style="padding: 6px 14px; font-size: 12px;">
+        <button id="btn-connect" class="btn btn-primary" title="Connect Wearable API" style="padding: 6px 14px; font-size: 12px;">
           <span>Connect</span>
         </button>
         <button id="btn-demo" class="action-circle-btn" title="Load sample 30-day realistic biometric data">
@@ -311,6 +323,99 @@
               <div class="progress-bar-bg" style="height: 5px;">
                 <div class="progress-bar-fill" id="glance-goal-progress" style="width: 78%; background: linear-gradient(90deg, #306EE8, #60A5FA);"></div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Row 3: Apex AI Physiological Copilot & Vitals Intelligence -->
+      <section class="overview-ai-copilot-section" style="margin-top: 24px;">
+        <div class="card-ai-copilot">
+          <div class="ai-copilot-header">
+            <div class="ai-header-left">
+              <div class="ai-badge-group">
+                <span class="card-tag">APEX AI PHYSIOLOGICAL COPILOT</span>
+                <span class="ai-model-tag" id="ai-engine-tag">⚡ Gemini 2.5 Flash / Clinical Engine</span>
+              </div>
+              <h3 class="ai-copilot-heading">Real-Time Autonomic Stress, Sleep & Breathwork Insights</h3>
+              <p class="ai-copilot-sub" id="ai-vitals-timestamp">Synthesizing live nocturnal HRV, Resting Heart Rate, and Sleep Architecture</p>
+            </div>
+            <div class="ai-header-right">
+              <div class="stress-status-pill" id="ai-stress-pill">
+                <span class="status-dot dot-green" id="ai-stress-dot"></span>
+                <span id="ai-stress-label">PARASYMPATHETIC EQUILIBRIUM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Physiological Cards Grid (Stress Diagnosis, Breathwork Prescription, Sleep Work) -->
+          <div class="ai-insights-grid">
+            <!-- 1. Autonomic Nervous System & Stress -->
+            <div class="ai-insight-card card-stress-insight">
+              <div class="ai-card-title-row">
+                <span class="ai-card-icon">⚡</span>
+                <h4>Autonomic Balance & Stress</h4>
+              </div>
+              <div class="ai-card-metric-row">
+                <span class="stress-score-badge" id="ai-stress-score">Score: 3/10</span>
+                <span class="stress-delta-text" id="ai-hrv-delta">HRV: +8% vs 7d Baseline</span>
+              </div>
+              <p class="ai-card-body-text" id="ai-stress-details">Your autonomic nervous system is in restorative parasympathetic tone. Nocturnal resting heart rate is stabilized with minimal systemic inflammation.</p>
+            </div>
+
+            <!-- 2. Targeted Breathwork Prescription -->
+            <div class="ai-insight-card card-breath-insight">
+              <div class="ai-card-title-row">
+                <span class="ai-card-icon">🫁</span>
+                <h4>Prescribed Breathwork Protocol</h4>
+              </div>
+              <div class="ai-card-metric-row">
+                <strong class="protocol-title" id="ai-breath-name">Cyclic Physiological Sigh</strong>
+                <span class="protocol-duration-chip" id="ai-breath-duration">5 min • 25 cycles</span>
+              </div>
+              <p class="ai-card-body-text" id="ai-breath-desc">Two quick inhales through the nose followed by a slow, passive sigh out through the mouth. Drops heart rate and suppresses acute sympathetic cortisol surge.</p>
+              <button type="button" class="btn-start-pacer" id="btn-open-breath-pacer">
+                <span>🫁 Start Guided Breathing Pacer</span>
+                <span class="arrow-icon">↗</span>
+              </button>
+            </div>
+
+            <!-- 3. Sleep Architecture Work Suggestion -->
+            <div class="ai-insight-card card-sleep-work-insight">
+              <div class="ai-card-title-row">
+                <span class="ai-card-icon">🌙</span>
+                <h4>Sleep Architecture Priority</h4>
+              </div>
+              <div class="ai-card-metric-row">
+                <strong class="sleep-work-target" id="ai-sleep-target">Boost Slow Wave Deep Sleep</strong>
+                <span class="sleep-work-impact" id="ai-sleep-impact">+20m Restorative Sleep</span>
+              </div>
+              <p class="ai-card-body-text" id="ai-sleep-action">End all meals 3h before bed to eliminate digestive thermogenesis. Take hot shower 90m pre-bed to accelerate core temperature cooling.</p>
+            </div>
+          </div>
+
+          <!-- Interactive AI Question & Chat Bar -->
+          <div class="ai-interaction-bar">
+            <div class="ai-prompt-pills">
+              <span class="prompt-pill-label">Quick Questions:</span>
+              <button type="button" class="ai-prompt-pill" data-prompt="Analyze my autonomic stress and HRV recovery for today">⚡ Analyze My Stress</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="What breathwork technique should I do right now to optimize recovery?">🫁 Prescribe Breathwork</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="What should I do tonight to optimize my Deep Sleep and REM architecture?">🌙 Sleep Work Tonight</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="How hard can I train today given my current recovery and strain?">🏋️ Today's Training Intensity</button>
+            </div>
+            <form id="form-ai-coach-chat" class="ai-chat-input-wrapper">
+              <input type="text" id="ai-coach-input" class="ai-chat-input" placeholder="Ask your AI Physiological Copilot anything about your vitals, stress, sleep, or recovery..." autocomplete="off">
+              <button type="submit" id="btn-ai-coach-send" class="btn-ai-send">
+                <span>Ask AI</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </form>
+            <div id="ai-chat-response-box" class="ai-chat-response-box hidden">
+              <div class="ai-response-header">
+                <span class="response-tag">⚡ COPILOT PHYSIOLOGICAL ASSESSMENT</span>
+                <button type="button" id="btn-close-ai-response" class="btn-close-response">✕</button>
+              </div>
+              <div id="ai-response-content" class="ai-response-content"></div>
             </div>
           </div>
         </div>
@@ -1044,6 +1149,41 @@
           <button type="submit" class="btn btn-primary">Create Habit</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Guided Breathing Pacer Modal -->
+  <div id="modal-breath-pacer" class="modal-overlay hidden" aria-modal="true" role="dialog">
+    <div class="pacer-modal-card">
+      <div class="pacer-modal-header">
+        <div>
+          <span class="card-tag">AUTONOMIC VAGAL REGULATION</span>
+          <h3 id="pacer-protocol-title" style="font-family: var(--font-display); font-size: 18px; color: #FFFFFF; margin-top: 2px;">Cyclic Physiological Sigh</h3>
+        </div>
+        <button type="button" class="modal-close-btn" id="btn-close-pacer" aria-label="Close Pacer">✕</button>
+      </div>
+
+      <div class="pacer-animation-container">
+        <div class="pacer-outer-glow" id="pacer-glow"></div>
+        <div class="pacer-circle" id="pacer-circle">
+          <span class="pacer-phase-text" id="pacer-phase">Get Ready</span>
+          <span class="pacer-timer-number" id="pacer-timer">3</span>
+        </div>
+      </div>
+
+      <div class="pacer-instructions-box">
+        <p id="pacer-instructions" style="font-size: 13px; color: var(--text-secondary); text-align: center; line-height: 1.5;">
+          Inhale deeply through your nose, take a second quick sip of air, then slowly sigh all the air out through your mouth.
+        </p>
+        <div class="pacer-cycle-tracker">
+          Cycle: <strong id="pacer-current-cycle">1</strong> / <span id="pacer-total-cycles">25</span>
+        </div>
+      </div>
+
+      <div class="pacer-controls-row">
+        <button type="button" class="btn btn-outline" id="btn-pacer-toggle">Pause</button>
+        <button type="button" class="btn btn-primary" id="btn-pacer-finish">End Session</button>
+      </div>
     </div>
   </div>
 
