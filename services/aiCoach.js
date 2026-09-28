@@ -10,13 +10,21 @@ class AICoachService {
   constructor() {
     this.apiKey = process.env.GEMINI_API_KEY || '';
     this.ai = null;
-    if (this.apiKey && GoogleGenAI) {
+  }
+
+  getAI() {
+    const key = process.env.GEMINI_API_KEY || this.apiKey || '';
+    if (!key || !GoogleGenAI) return null;
+    if (!this.ai || this.apiKey !== key) {
       try {
-        this.ai = new GoogleGenAI({ apiKey: this.apiKey });
+        this.apiKey = key;
+        this.ai = new GoogleGenAI({ apiKey: key });
       } catch (e) {
         console.warn('Failed to initialize GoogleGenAI client:', e.message);
+        return null;
       }
     }
+    return this.ai;
   }
 
   /**
@@ -306,10 +314,18 @@ class AICoachService {
     const loggedCalories = hypertrophy?.log?.calories || 0;
     const loggedProtein = hypertrophy?.log?.protein || 0;
 
-    // 1. If Gemini API Key is configured, use Gemini 2.5 Flash
-    if (this.ai && this.apiKey) {
-      try {
-        const systemPrompt = `You are the official WHOOP Coach AI, an elite human performance and sports physiologist.
+    // 1. If Gemini API Key is configured, use Gemini Models with candidate fallback
+    const aiClient = this.getAI();
+    if (aiClient) {
+      const candidateModels = [
+        'gemini-3.5-flash-lite',
+        'gemini-flash-lite-latest',
+        'gemini-3.1-flash-lite',
+        'gemini-flash-latest',
+        'gemini-3.8-flash',
+        'gemini-3.5-flash'
+      ];
+      const systemPrompt = `You are the official WHOOP Coach AI, an elite human performance and sports physiologist.
 The user is tracking their biometrics using ${provider === 'google_fitbit' ? 'Google Pixel Watch / Fitbit' : 'WHOOP 4.0'}.
 The biometric data was freshly synced from their wearable.
 
@@ -333,26 +349,29 @@ PHYSIOLOGICAL TELEMETRY:
 GUIDELINES:
 - Speak exactly like WHOOP Coach: authoritative, direct, empathetic, and scientifically rigorous.
 - Cite their exact numbers (HRV, Recovery %, Deep sleep %, Target Strain).
-- Answer the user's specific prompt directly with actionable guidance in bullet points.`;
+- Answer the user's specific prompt directly with actionable guidance in structured bullet points.`;
 
-        const response = await this.ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: [
-            { role: 'user', parts: [{ text: `${systemPrompt}\n\nUSER QUESTION: ${userPrompt}` }] }
-          ]
-        });
+      for (const modelName of candidateModels) {
+        try {
+          const response = await aiClient.models.generateContent({
+            model: modelName,
+            contents: [
+              { role: 'user', parts: [{ text: `${systemPrompt}\n\nUSER QUESTION: ${userPrompt}` }] }
+            ]
+          });
 
-        if (response && response.text) {
-          return {
-            reply: response.text.trim(),
-            source: 'gemini-2.5-flash',
-            analysis,
-            synced: true,
-            provider
-          };
+          if (response && response.text) {
+            return {
+              reply: response.text.trim(),
+              source: `Gemini Flash (${modelName})`,
+              analysis,
+              synced: true,
+              provider
+            };
+          }
+        } catch (err) {
+          console.warn(`Gemini model ${modelName} attempt:`, err.message);
         }
-      } catch (err) {
-        console.warn('Gemini API call failed, falling back to clinical WHOOP Coach engine:', err.message);
       }
     }
 
