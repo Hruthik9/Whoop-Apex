@@ -20,6 +20,7 @@ let state = {
   hypertrophy: null,
   charts: {},
   aiInsights: null,
+  chatHistory: [],
   pacer: {
     active: false,
     paused: false,
@@ -197,6 +198,17 @@ function initEventListeners() {
   const btnCloseAiResponse = document.getElementById('btn-close-ai-response');
   if (btnCloseAiResponse) {
     btnCloseAiResponse.addEventListener('click', () => {
+      const box = document.getElementById('ai-chat-response-box');
+      if (box) box.classList.add('hidden');
+    });
+  }
+
+  const btnClearAiChat = document.getElementById('btn-clear-ai-chat');
+  if (btnClearAiChat) {
+    btnClearAiChat.addEventListener('click', () => {
+      state.chatHistory = [];
+      const container = document.getElementById('ai-chat-messages-container');
+      if (container) container.innerHTML = '';
       const box = document.getElementById('ai-chat-response-box');
       if (box) box.classList.add('hidden');
     });
@@ -2186,58 +2198,93 @@ function renderAICoachInsights(insights) {
   }
 }
 
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 async function handleAICoachQuery(prompt) {
   const box = document.getElementById('ai-chat-response-box');
-  const content = document.getElementById('ai-response-content');
-  if (!box || !content) return;
+  const container = document.getElementById('ai-chat-messages-container');
+  if (!box || !container) return;
+
+  if (!Array.isArray(state.chatHistory)) {
+    state.chatHistory = [];
+  }
 
   box.classList.remove('hidden');
   const providerName = state.activeProvider === 'google_fitbit' ? 'Google Fitbit' : 'WHOOP';
 
-  // Stage 1: Syncing live telemetry from wearable
-  content.innerHTML = `
-    <div style="padding: 12px 0;">
-      <div style="display: flex; align-items: center; gap: 10px; color: #60A5FA; font-size: 13.5px; font-weight: 500; margin-bottom: 6px;">
-        <span class="status-dot dot-blue" style="animation: pulse 0.8s infinite alternate; width: 10px; height: 10px;"></span>
-        <span>🔄 Step 1/2: Syncing latest telemetry from ${providerName}...</span>
-      </div>
-      <div style="font-size: 12px; color: var(--text-muted); padding-left: 20px;">
-        Querying wearable API for updated sleep stages, nocturnal HRV, and daily strain...
-      </div>
+  // 1. Append User Message Bubble
+  const userRow = document.createElement('div');
+  userRow.className = 'chat-message-row chat-user-row';
+  userRow.innerHTML = `
+    <div class="chat-bubble chat-bubble-user">
+      <div class="chat-sender-label-user">You</div>
+      <div>${escapeHtml(prompt)}</div>
     </div>
   `;
+  container.appendChild(userRow);
+
+  // 2. Append Loading / Syncing Indicator Bubble
+  const loadingRow = document.createElement('div');
+  loadingRow.className = 'chat-message-row chat-coach-row';
+  loadingRow.id = 'chat-loading-bubble';
+  loadingRow.innerHTML = `
+    <div class="chat-bubble chat-bubble-coach chat-bubble-loading">
+      <div class="chat-loading-spinner"></div>
+      <span id="chat-loading-text">🔄 Step 1/2: Syncing latest telemetry from ${providerName}...</span>
+    </div>
+  `;
+  container.appendChild(loadingRow);
+  container.scrollTop = container.scrollHeight;
   box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  // Stage 2 transition timer
+  // Transition loading text to synthesis after 650ms
   const stageTimer = setTimeout(() => {
-    content.innerHTML = `
-      <div style="padding: 12px 0;">
-        <div style="display: flex; align-items: center; gap: 10px; color: #00F076; font-size: 13.5px; font-weight: 500; margin-bottom: 6px;">
-          <span class="status-dot dot-green" style="animation: pulse 0.8s infinite alternate; width: 10px; height: 10px;"></span>
-          <span>🧠 Step 2/2: WHOOP Coach: Synthesizing recovery, sleep architecture & strain baselines...</span>
-        </div>
-        <div style="font-size: 12px; color: var(--text-muted); padding-left: 20px;">
-          Evaluating 7-day baselines, restorative sleep ratio, and personalized physiological targets...
-        </div>
-      </div>
-    `;
+    const textEl = document.getElementById('chat-loading-text');
+    if (textEl) {
+      textEl.textContent = '🧠 Step 2/2: WHOOP Coach: Synthesizing recovery & biometrics...';
+      textEl.style.color = '#38BDF8';
+    }
   }, 650);
 
   try {
     const res = await fetch('/api/ai/coach/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, date: state.selectedDate, sync: true })
+      body: JSON.stringify({
+        prompt,
+        date: state.selectedDate,
+        sync: true,
+        conversationHistory: state.chatHistory.slice(-6)
+      })
     });
     clearTimeout(stageTimer);
     const data = await res.json();
 
+    // Remove loading bubble
+    const loader = document.getElementById('chat-loading-bubble');
+    if (loader) loader.remove();
+
     if (!data.success) {
-      content.innerHTML = `<p style="color: #FF3B30;">Error: ${data.error || 'Failed to generate physiological assessment'}</p>`;
+      const errRow = document.createElement('div');
+      errRow.className = 'chat-message-row chat-coach-row';
+      errRow.innerHTML = `
+        <div class="chat-bubble chat-bubble-coach" style="border-color: rgba(239,68,68,0.4);">
+          <p style="color: #F87171; margin: 0;">⚠️ ${escapeHtml(data.error || 'Failed to generate physiological assessment')}</p>
+        </div>
+      `;
+      container.appendChild(errRow);
+      container.scrollTop = container.scrollHeight;
       return;
     }
 
-    // If new records were synced or telemetry updated, refresh dashboard in background
+    // Refresh dashboard if new wearable records were synced
     if (data.syncDetails?.synced && data.syncDetails?.newRecords > 0) {
       try {
         loadData(false);
@@ -2252,39 +2299,59 @@ async function handleAICoachQuery(prompt) {
       .replace(/>/g, '&gt;')
       .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #FFFFFF;">$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/^### (.*$)/gim, '<h4 style="color: #FFFFFF; font-size: 14.5px; margin: 14px 0 8px 0; font-family: var(--font-display);">$1</h4>')
-      .replace(/^## (.*$)/gim, '<h3 style="color: #FFFFFF; font-size: 16px; margin: 16px 0 10px 0; font-family: var(--font-display);">$1</h3>')
-      .replace(/^>\s*(.*$)/gim, '<div style="background: rgba(48,110,232,0.1); border-left: 3px solid #306EE8; padding: 8px 12px; margin: 8px 0; border-radius: 4px; font-size: 12.5px; color: #94A3B8;">$1</div>')
-      .replace(/^\s*[-•]\s+(.*$)/gim, '<li style="margin-bottom: 5px; color: #CBD5E1; line-height: 1.55;">$1</li>')
-      .replace(/\n\n+/g, '</p><p style="margin-bottom: 12px; color: #94A3B8; line-height: 1.6;">')
+      .replace(/^### (.*$)/gim, '<h4 style="color: #FFFFFF; font-size: 14.5px; margin: 10px 0 6px 0; font-family: var(--font-display);">$1</h4>')
+      .replace(/^## (.*$)/gim, '<h3 style="color: #FFFFFF; font-size: 15px; margin: 12px 0 8px 0; font-family: var(--font-display);">$1</h3>')
+      .replace(/^>\s*(.*$)/gim, '<div style="background: rgba(48,110,232,0.1); border-left: 3px solid #306EE8; padding: 6px 10px; margin: 6px 0; border-radius: 4px; font-size: 12px; color: #94A3B8;">$1</div>')
+      .replace(/^\s*[-•]\s+(.*$)/gim, '<li style="margin-bottom: 4px; color: #CBD5E1; line-height: 1.5;">$1</li>')
+      .replace(/\n\n+/g, '</p><p style="margin-bottom: 10px; color: #E2E8F0; line-height: 1.55;">')
       .replace(/\n/g, '<br>');
 
     if (formatted.includes('<li')) {
-      formatted = formatted.replace(/(<li.*<\/li>)/s, '<ul style="padding-left: 20px; margin: 8px 0 12px 0;">$1</ul>');
+      formatted = formatted.replace(/(<li.*<\/li>)/s, '<ul style="padding-left: 18px; margin: 6px 0 10px 0;">$1</ul>');
     }
 
-    const syncBadgeText = data.syncDetails?.synced
-      ? `⚡ Synced Live Telemetry (${data.syncDetails?.latestDate || state.selectedDate})`
-      : `⚡ Verified Telemetry (${data.syncDetails?.latestDate || state.selectedDate})`;
+    const badgeSource = (data.source && data.source.includes('Gemini'))
+      ? `${data.source}`
+      : 'WHOOP Clinical Engine';
 
-    const sourceTag = data.source === 'gemini-2.5-flash'
-      ? `<span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; padding:3px 10px; border-radius:12px; background:rgba(48,110,232,0.18); color:#60A5FA; border:1px solid rgba(48,110,232,0.4); font-weight:600;">⚡ Gemini 2.5 Flash Verified • ${syncBadgeText}</span>`
-      : `<span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; padding:3px 10px; border-radius:12px; background:rgba(0,240,118,0.15); color:#00F076; border:1px solid rgba(0,240,118,0.3); font-weight:600;">⚡ WHOOP Coach Verified • ${syncBadgeText}</span>`;
-
-    content.innerHTML = `
-      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
-        <div>${sourceTag}</div>
-        <span style="font-size: 11px; color: var(--text-muted);">Wearable: <strong>${providerName}</strong></span>
-      </div>
-      <div style="font-size: 13.5px; line-height: 1.6; color: #E2E8F0;">
-        <p style="margin-bottom: 8px;">${formatted}</p>
+    // 3. Append Coach Response Bubble
+    const coachRow = document.createElement('div');
+    coachRow.className = 'chat-message-row chat-coach-row';
+    coachRow.innerHTML = `
+      <div class="chat-bubble chat-bubble-coach">
+        <div class="chat-sender-header-coach">
+          <span class="coach-sender-title">⚡ WHOOP Coach</span>
+          <span class="coach-model-badge">${badgeSource}</span>
+        </div>
+        <div style="font-size: 13px; line-height: 1.55; color: #E2E8F0;">
+          <p style="margin-bottom: 0;">${formatted}</p>
+        </div>
       </div>
     `;
+    container.appendChild(coachRow);
+    container.scrollTop = container.scrollHeight;
+
+    // 4. Memorize this turn in active session memory
+    state.chatHistory.push(
+      { role: 'user', text: prompt },
+      { role: 'model', text: data.reply }
+    );
 
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (err) {
     clearTimeout(stageTimer);
-    content.innerHTML = `<p style="color: #FF3B30;">Network error: ${err.message}</p>`;
+    const loader = document.getElementById('chat-loading-bubble');
+    if (loader) loader.remove();
+
+    const errRow = document.createElement('div');
+    errRow.className = 'chat-message-row chat-coach-row';
+    errRow.innerHTML = `
+      <div class="chat-bubble chat-bubble-coach" style="border-color: rgba(239,68,68,0.4);">
+        <p style="color: #F87171; margin: 0;">⚠️ Network error: ${escapeHtml(err.message)}</p>
+      </div>
+    `;
+    container.appendChild(errRow);
+    container.scrollTop = container.scrollHeight;
   }
 }
 

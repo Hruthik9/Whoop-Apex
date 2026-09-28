@@ -376,7 +376,7 @@ app.get('/api/ai/coach/insights', (req, res) => {
 
 app.post('/api/ai/coach/chat', async (req, res) => {
   try {
-    const { prompt, date, sync = true } = req.body;
+    const { prompt, date, sync = true, conversationHistory = [] } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
     const activeProvider = db.getActiveProvider();
@@ -462,7 +462,7 @@ app.post('/api/ai/coach/chat', async (req, res) => {
       syncResult
     };
 
-    const response = await aiCoachService.chatWithCoach(prompt, context, history);
+    const response = await aiCoachService.chatWithCoach(prompt, context, history, conversationHistory);
 
     res.json({
       success: true,

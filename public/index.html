@@ -414,10 +414,16 @@
             </form>
             <div id="ai-chat-response-box" class="ai-chat-response-box hidden">
               <div class="ai-response-header">
-                <span class="response-tag">⚡ WHOOP COACH LIVE PHYSIOLOGICAL SYNTHESIS</span>
-                <button type="button" id="btn-close-ai-response" class="btn-close-response">✕</button>
+                <div class="ai-header-title-group">
+                  <span class="response-tag">⚡ WHOOP COACH LIVE CHAT</span>
+                  <span class="session-memory-badge" title="Remembers the current active conversation for natural follow-ups">🧠 Session Memory Active</span>
+                </div>
+                <div class="ai-header-actions">
+                  <button type="button" id="btn-clear-ai-chat" class="btn-clear-chat" title="Clear current conversation and start fresh">↺ New Chat</button>
+                  <button type="button" id="btn-close-ai-response" class="btn-close-response" title="Close chat window">✕</button>
+                </div>
               </div>
-              <div id="ai-response-content" class="ai-response-content"></div>
+              <div id="ai-chat-messages-container" class="ai-chat-messages-container"></div>
             </div>
           </div>
         </div>

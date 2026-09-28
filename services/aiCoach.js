@@ -293,8 +293,7 @@ class AICoachService {
   /**
    * Interactive chat query using Gemini 2.5 Flash if API key is configured,
    * or the advanced Clinical WHOOP Coach Physiological Engine.
-   */
-  async chatWithCoach(userPrompt, contextOrVitals = {}, history = []) {
+   */  async chatWithCoach(userPrompt, contextOrVitals = {}, history = [], conversationHistory = []) {
     const isRichContext = !!contextOrVitals.currentVitals;
     const currentVitals = isRichContext ? contextOrVitals.currentVitals : contextOrVitals;
     const yesterdayVitals = isRichContext ? contextOrVitals.yesterdayVitals : null;
@@ -314,7 +313,7 @@ class AICoachService {
     const loggedCalories = hypertrophy?.log?.calories || 0;
     const loggedProtein = hypertrophy?.log?.protein || 0;
 
-    // 1. If Gemini API Key is configured, use Gemini Models with candidate fallback
+    // 1. If Gemini API Key is configured, use Gemini Models with active conversation memory
     const aiClient = this.getAI();
     if (aiClient) {
       const candidateModels = [
@@ -325,39 +324,60 @@ class AICoachService {
         'gemini-3.8-flash',
         'gemini-3.5-flash'
       ];
-      const systemPrompt = `You are the official WHOOP Coach AI, an elite human performance and sports physiologist.
+
+      const systemInstruction = `You are WHOOP Coach AI, an elite, caring human performance coach.
 The user is tracking their biometrics using ${provider === 'google_fitbit' ? 'Google Pixel Watch / Fitbit' : 'WHOOP 4.0'}.
-The biometric data was freshly synced from their wearable.
+Biometrics are freshly synced from their wearable.
 
-PHYSIOLOGICAL TELEMETRY:
-- Date: ${analysis.date}
-- Recovery Score: ${analysis.recovery.score}% (${analysis.recovery.category})
-- HRV: ${analysis.recovery.hrv} ms (7-Day Baseline: ${analysis.recovery.avgHrv7} ms | Delta: ${analysis.recovery.hrvDeltaPct}%)
-- Resting Heart Rate: ${analysis.recovery.rhr} bpm (7-Day Baseline: ${analysis.recovery.avgRhr7} bpm | Shift: ${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm)
-- Respiratory Rate: ${analysis.sleep_architecture.resp_rate} rpm (Delta: ${analysis.sleep_architecture.resp_delta >= 0 ? '+' : ''}${analysis.sleep_architecture.resp_delta} rpm)
-- Day Strain: ${analysis.training.dayStrain} (Optimal Target Range: ${analysis.training.strainTargetMin} - ${analysis.training.strainTargetMax})
-- Yesterday's Strain: ${yesterdayVitals?.strain?.score || 'N/A'}
+PHYSIOLOGICAL TELEMETRY (${analysis.date}):
+- Recovery: ${analysis.recovery.score}% (${analysis.recovery.category})
+- HRV: ${analysis.recovery.hrv} ms (7d Baseline: ${analysis.recovery.avgHrv7} ms | Delta: ${analysis.recovery.hrvDeltaPct}%)
+- Resting HR: ${analysis.recovery.rhr} bpm (7d Baseline: ${analysis.recovery.avgRhr7} bpm | Shift: ${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm)
+- Respiratory Rate: ${analysis.sleep_architecture.resp_rate} rpm
+- Day Strain: ${analysis.training.dayStrain} (Optimal Target: ${analysis.training.strainTargetMin} - ${analysis.training.strainTargetMax})
 - Total Sleep: ${analysis.sleep_architecture.total_asleep_hours}h (${analysis.sleep_architecture.total_asleep_min}m)
-- Deep Sleep (Slow Wave): ${analysis.sleep_architecture.sws_min}m (${analysis.sleep_architecture.deep_pct}% of sleep)
-- REM Sleep: ${analysis.sleep_architecture.rem_min}m (${analysis.sleep_architecture.rem_pct}% of sleep)
-- Sleep Debt: +${analysis.sleep_architecture.debt_min}m (Tonight's Total Need: ${Math.floor(analysis.sleep_architecture.need_total_min / 60)}h ${analysis.sleep_architecture.need_total_min % 60}m)
-- Calculated Lights-Out Bedtime: ${times.lightsOut} (Wind-down: ${times.windDown} | Meal Cutoff: ${times.dinnerCutoff})
+- Deep Sleep (Slow Wave): ${analysis.sleep_architecture.sws_min}m (${analysis.sleep_architecture.deep_pct}%)
+- REM Sleep: ${analysis.sleep_architecture.rem_min}m (${analysis.sleep_architecture.rem_pct}%)
+- Sleep Debt: +${analysis.sleep_architecture.debt_min}m | Target Bedtime: ${times.lightsOut} (Wind-down: ${times.windDown} | Meal Cutoff: ${times.dinnerCutoff})
 - Body Weight: ${weightKg} kg | Target Protein: ${optimalProtein}g | Target Calories: ${targetCalories} kcal
-- Autonomic Nervous System State: ${analysis.stress.title} (${analysis.stress.state})
-- Recommended Breathwork: ${analysis.breathwork.name} (${analysis.breathwork.duration_min} min)
+- Autonomic State: ${analysis.stress.title} (${analysis.stress.state})
+- Prescribed Breathwork: ${analysis.breathwork.name} (${analysis.breathwork.duration_min} min)
 
-GUIDELINES:
-- Speak exactly like WHOOP Coach: authoritative, direct, empathetic, and scientifically rigorous.
-- Cite their exact numbers (HRV, Recovery %, Deep sleep %, Target Strain).
-- Answer the user's specific prompt directly with actionable guidance in structured bullet points.`;
+CORE COACHING INSTRUCTIONS:
+1. SHORT & SIMPLE: Strictly keep your response concise (50-90 words, never more than 110 words). Avoid dense medical jargon, walls of text, or overly long lectures.
+2. EMPATHETIC & WARM: Talk like a supportive coach who cares about how their body feels today.
+3. CLEAR & SUGGESTIVE: Provide 2-3 gentle, practical suggestions they can act on right now.
+4. ACTIVE SESSION MEMORY: Remember earlier questions and answers from this active conversation. Answer follow-up questions naturally based on previous context.`;
+
+      // Build multi-turn messages array from conversationHistory
+      const contents = [];
+      if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+        const recentTurns = conversationHistory.slice(-6);
+        for (const turn of recentTurns) {
+          const role = (turn.role === 'model' || turn.role === 'assistant' || turn.role === 'coach') ? 'model' : 'user';
+          const text = typeof turn.text === 'string' ? turn.text.trim() : (typeof turn.content === 'string' ? turn.content.trim() : '');
+          if (text) {
+            if (contents.length === 0 || contents[contents.length - 1].role !== role) {
+              contents.push({ role, parts: [{ text }] });
+            }
+          }
+        }
+      }
+
+      if (contents.length > 0 && contents[contents.length - 1].role === 'user') {
+        contents[contents.length - 1].parts[0].text += `\n${userPrompt.trim()}`;
+      } else {
+        contents.push({ role: 'user', parts: [{ text: userPrompt.trim() }] });
+      }
 
       for (const modelName of candidateModels) {
         try {
           const response = await aiClient.models.generateContent({
             model: modelName,
-            contents: [
-              { role: 'user', parts: [{ text: `${systemPrompt}\n\nUSER QUESTION: ${userPrompt}` }] }
-            ]
+            contents,
+            config: {
+              systemInstruction
+            }
           });
 
           if (response && response.text) {
@@ -376,155 +396,81 @@ GUIDELINES:
     }
 
     // 2. High-Precision Clinical WHOOP Coach Engine (Offline & Default)
+    // Short, clear, empathetic, and suggestive
     const q = (userPrompt || '').toLowerCase();
     let reply = '';
+    const hasHistory = Array.isArray(conversationHistory) && conversationHistory.length > 0;
+    const historyPrefix = hasHistory ? 'Building on our conversation: ' : '';
 
     const isTraining = /work\s*out|lift|train|strain|exercise|gym|cardio|run|push|heavy|intensity|target\s*strain|rest\s*day|can\s*i/i.test(q);
     const isRecovery = /why\s*(is|my)?\s*recovery|recovery\s*(score|down|low|red|yellow)|improve\s*recovery|boost\s*recovery|culprit/i.test(q);
     const isSleep = /how\s*(was|is)\s*(my\s*)?sleep|sleep\s*(stage|score|quality|need|debt|efficiency)|deep\s*sleep|slow\s*wave|rem|sws|tired|wake|nap|bedtime|when\s*should\s*i\s*(sleep|bed)/i.test(q);
     const isVitals = /hrv|heart\s*rate\s*variability|rhr|resting\s*heart|vagal|respiratory|sympathetic|parasympathetic|ans|autonomic|stress/i.test(q);
-    const isNutrition = /protein|eat|nutrition|food|calories|macros|hypertrophy|diet|muscle|bulk|cut|fuel/i.test(q);
+    const isNutrition = /protein|eat|nutrition|food|calories|macros|hypertrophy|diet|muscle|bulk|cut|fuel|dinner|lunch|breakfast/i.test(q);
     const isHabits = /habit|alcohol|caffeine|sunlight|cold\s*plunge|sauna|routine|lifestyle|what\s*helps/i.test(q);
     const isBreath = /breath|breathe|pacer|sigh|4-7-8|box\s*breath|calm/i.test(q);
 
     if (isTraining) {
-      // 🏋️ Training & Strain Capacity
-      reply = `### 🏋️ WHOOP Coach: Training & Strain Capacity Assessment\n\n` +
-        `**Readiness State:** Your Recovery is **${analysis.recovery.score}% (${analysis.recovery.category})** with nocturnal HRV at **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs 7-day baseline) and Resting Heart Rate at **${analysis.recovery.rhr} bpm** (${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm shift).\n\n`;
-
       if (analysis.recovery.score >= 67) {
-        reply += `🟢 **GREEN LIGHT TO PUSH:** Your cardiovascular system and autonomic nervous system are primed for high neuromuscular output. Your body has absorbed prior training load and is ready for progressive overload.\n\n` +
-          `• **Target Day Strain:** **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax} (High Output)**\n` +
-          `• **Recommended Modality:** Heavy compound resistance training (RPE 8–9), high-intensity interval training (HIIT), or lactate threshold conditioning.\n` +
-          `• **Current Accumulated Strain:** **${analysis.training.dayStrain}**. You have capacity to build an additional **+${Math.max(0, (analysis.training.strainTargetMax - analysis.training.dayStrain).toFixed(1))} strain** today.\n` +
-          `• **Fueling Advice:** Consume 30–40g of fast carbohydrates with 25g protein 45 minutes prior to training to maximize glycogen availability.`;
+        reply = `${historyPrefix}Your recovery is looking great at **${analysis.recovery.score}% (${analysis.recovery.category})**! Your cardiovascular system and nervous system are primed to push.\n\n` +
+          `• **Target Strain:** **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}** (Heavy lifts or intense cardio are welcome today)\n` +
+          `• **Fueling:** Grab 25–30g protein and some light carbs after training to rebuild glycogen\n` +
+          `• **Wind-down:** Aim to start relaxing around **${times.windDown}** so tomorrow stays green.`;
       } else if (analysis.recovery.score >= 34) {
-        reply += `🟡 **MODERATE CAPACITY (MAINTENANCE):** You are in a balanced holding pattern. While your autonomic nervous system is functional, it is experiencing mild down-regulation.\n\n` +
-          `• **Target Day Strain:** **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax} (Optimal Aerobic Zone)**\n` +
-          `• **Recommended Modality:** Moderate resistance training with controlled volume, steady-state Zone 2 aerobic base cardio (65–75% Max HR), or technical sport drills. Avoid training to absolute failure today.\n` +
-          `• **Current Accumulated Strain:** **${analysis.training.dayStrain}**. Keep your remaining strain capped below **${analysis.training.strainTargetMax}** to avoid digging into an autonomic deficit tomorrow.`;
+        reply = `${historyPrefix}Your recovery is in a moderate zone at **${analysis.recovery.score}% (${analysis.recovery.category})**. You have solid energy, but your nervous system is in a balanced maintenance state.\n\n` +
+          `• **Target Strain:** Keep it between **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}**\n` +
+          `• **Workout Style:** Steady Zone 2 cardio or moderate lifting without pushing to failure\n` +
+          `• **Suggestion:** Stay well hydrated today and take 5 minutes to stretch post-workout.`;
       } else {
-        reply += `🔴 **ACTIVE RECOVERY ONLY:** Your autonomic nervous system is signaling significant systemic fatigue. Pushing high strain today will blunt muscular adaptations and prolong systemic recovery debt.\n\n` +
-          `• **Target Day Strain:** **< ${analysis.training.strainTargetMax} (Restorative Zone)**\n` +
-          `• **Recommended Modality:** Zone 1 active recovery walk (20–30 min), light mobility work, dynamic stretching, or sauna/heat therapy. Do NOT perform heavy eccentric lifting today.\n` +
-          `• **Current Accumulated Strain:** **${analysis.training.dayStrain}**. Prioritize parasympathetic activation, hydration, and an early bedtime.`;
+        reply = `${historyPrefix}Your body is carrying some fatigue today with recovery at **${analysis.recovery.score}% (${analysis.recovery.category})** and HRV down to **${analysis.recovery.hrv} ms**. Be kind to yourself today.\n\n` +
+          `• **Recommendation:** Prioritize active recovery—a 20-minute walk or gentle mobility\n` +
+          `• **Strain Cap:** Keep total strain low (< **${analysis.training.strainTargetMax}**)\n` +
+          `• **Suggestion:** Try 5 minutes of **${analysis.breathwork.name}** and aim for lights-out by **${times.lightsOut}**.`;
       }
-
-      if (yesterdayVitals?.strain?.score > 14) {
-        reply += `\n\n> ⚠️ *Context Note:* Yesterday's strain was high (**${yesterdayVitals.strain.score}**), which is contributing to today's residual neuromuscular fatigue.`;
-      }
-
     } else if (isRecovery) {
-      // 🩺 Recovery Diagnostics
-      reply = `### 🩺 WHOOP Coach: Recovery Diagnostics & Root-Cause Breakdown\n\n` +
-        `Your Recovery today is **${analysis.recovery.score}% (${analysis.recovery.category})**. Here is the physiological breakdown of what drove your score:\n\n` +
-        `**Primary Recovery Culprits:**\n` +
-        (analysis.culprits.length > 0 ? analysis.culprits.map(c => `• ${c}`).join('\n') : `• Overall biomarkers are well-balanced within your rolling baseline ranges.\n`) +
-        `\n\n**Autonomic Telemetry Deep-Dive:**\n` +
-        `• **Heart Rate Variability (HRV):** **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs your 7-day baseline of ${analysis.recovery.avgHrv7} ms). ` +
-        (analysis.recovery.hrvDeltaPct < -10 ? 'A suppressed HRV indicates sympathetic dominance (fight-or-flight), meaning your sinoatrial node is receiving reduced vagal brake modulation.' : 'HRV remains in a resilient, adaptive state.') + `\n` +
-        `• **Resting Heart Rate (RHR):** **${analysis.recovery.rhr} bpm** (${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm vs 7d average of ${analysis.recovery.avgRhr7} bpm). ` +
-        (analysis.recovery.rhrDelta > 2 ? 'Elevated resting HR indicates nocturnal cardiac workload—often triggered by late digestion, elevated core temp, or unresolved muscular inflammation.' : 'Resting HR was stable during nocturnal rest.') + `\n` +
-        `• **Respiratory Rate:** **${analysis.sleep_architecture.resp_rate} rpm** (${analysis.sleep_architecture.resp_delta >= 0 ? '+' : ''}${analysis.sleep_architecture.resp_delta} rpm vs baseline). ` +
-        (analysis.sleep_architecture.resp_delta > 0.8 ? 'Elevated respiratory rate is frequently an early warning sign of immune activation, airway congestion, or systemic overreaching.' : 'Respiratory rate is completely stable.') + `\n\n` +
-        `**Immediate Actions to Rebound for Tomorrow:**\n` +
-        `1. **End Caloric Intake by ${times.dinnerCutoff}:** Give your gastrointestinal tract 3 hours before sleep to prevent nocturnal cardiac workload.\n` +
-        `2. **Execute Vagal Breathwork:** Complete 5 minutes of **${analysis.breathwork.name}** in Tab 2 to stimulate the vagus nerve and slow heart rate.\n` +
-        `3. **Target Bedtime of ${times.lightsOut}:** Total sleep needed tonight is **${Math.floor(analysis.sleep_architecture.need_total_min / 60)}h ${analysis.sleep_architecture.need_total_min % 60}m** (includes +${analysis.sleep_architecture.debt_min}m debt payback).`;
-
+      reply = `${historyPrefix}Your recovery is at **${analysis.recovery.score}% (${analysis.recovery.category})**. Here is what influenced it most:\n\n` +
+        `• **HRV:** **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs your 7-day average of ${analysis.recovery.avgHrv7} ms)\n` +
+        `• **Resting HR:** **${analysis.recovery.rhr} bpm** (${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm shift)\n` +
+        (analysis.culprits.length > 0 ? `• **Key Factor:** ${analysis.culprits[0]}\n\n` : `\n`) +
+        `**Gentle Suggestions:**\n` +
+        `1. Wrap up dinner by **${times.dinnerCutoff}** to give your digestion a full rest\n` +
+        `2. Take 5 minutes for **${analysis.breathwork.name}** in the Recovery Lab\n` +
+        `3. Target bedtime at **${times.lightsOut}** to clear your +${analysis.sleep_architecture.debt_min}m sleep debt.`;
     } else if (isSleep) {
-      // 🌙 Sleep Architecture & Hypnogram
-      reply = `### 🌙 WHOOP Coach: Sleep Architecture & Stage Diagnostics\n\n` +
-        `**Total Time Asleep:** **${analysis.sleep_architecture.total_asleep_hours} hours (${analysis.sleep_architecture.total_asleep_min} minutes)**\n` +
-        `**Sleep Performance:** **${Math.round((analysis.sleep_architecture.total_asleep_min / (analysis.sleep_architecture.need_total_min || 480)) * 100)}%** of your **${Math.floor(analysis.sleep_architecture.need_total_min / 60)}h ${analysis.sleep_architecture.need_total_min % 60}m** sleep need.\n\n` +
-        `**Hypnogram Stage Breakdown:**\n` +
-        `• **Slow Wave Sleep (Deep Sleep):** **${analysis.sleep_architecture.sws_min} minutes (${analysis.sleep_architecture.deep_pct}% of total)**\n` +
-        `  *Clinical Standard: 20–25% (≥ 90m for athletic muscle remodeling)*\n` +
-        (analysis.sleep_architecture.deep_pct >= 20 
-          ? `  ✅ **OPTIMAL:** Excellent slow-wave sleep. This is when your pituitary gland pulses Human Growth Hormone (HGH) to repair muscular microtrauma and restore cellular glycogen.` 
-          : `  ⚠️ **DEFICIT:** Deep sleep was below the 20% threshold. Physical tissue remodeling, muscular recovery, and nocturnal HGH secretion were curtailed.`) + `\n\n` +
-        `• **REM Sleep (Rapid Eye Movement):** **${analysis.sleep_architecture.rem_min} minutes (${analysis.sleep_architecture.rem_pct}% of total)**\n` +
-        `  *Clinical Standard: 20–25% (≥ 90m for cognitive performance)*\n` +
-        (analysis.sleep_architecture.rem_pct >= 20 
-          ? `  ✅ **OPTIMAL:** Strong REM cycle completion. Consolidates neuro-motor patterns learned in training and resets emotional/mental resilience.` 
-          : `  ⚠️ **DEFICIT:** REM was constrained. You may experience midday mental fatigue or reduced executive focus today.`) + `\n\n` +
-        `• **Light Sleep:** **${analysis.sleep_architecture.light_min}m** (${Math.round((analysis.sleep_architecture.light_min / (analysis.sleep_architecture.total_asleep_min || 1)) * 100)}%) — baseline physiological buffer.\n` +
-        `• **Awake & Disturbances:** **${analysis.sleep_architecture.awake_min}m** across **${analysis.sleep_architecture.disturbances} micro-awakenings**.\n` +
-        `• **Sleep Efficiency:** **${analysis.sleep_architecture.efficiency}%** | **Sleep Consistency:** **${analysis.sleep_architecture.consistency}%**.\n\n` +
-        `**Tonight's Sleep Target Schedule:**\n` +
-        `• **Lights-Out Bedtime:** **${times.lightsOut}** (for 7:00 AM wake-up)\n` +
-        `• **Pre-Bed Wind Down:** Begin dimming lights and cutting screens at **${times.windDown}**\n` +
-        `• **Sleep Work Recommendation:** ${analysis.sleep_work[0]?.action || 'Maintain consistent bedtime ±20 minutes.'}`;
-
+      reply = `${historyPrefix}You logged **${analysis.sleep_architecture.total_asleep_hours} hours** of sleep last night (${Math.round((analysis.sleep_architecture.total_asleep_min / (analysis.sleep_architecture.need_total_min || 480)) * 100)}% of your sleep need).\n\n` +
+        `• **Deep Sleep:** **${analysis.sleep_architecture.sws_min}m (${analysis.sleep_architecture.deep_pct}%)** — ${analysis.sleep_architecture.deep_pct >= 20 ? 'Optimal physical remodeling' : 'Slightly low, keep tonight cool'}\n` +
+        `• **REM Sleep:** **${analysis.sleep_architecture.rem_min}m (${analysis.sleep_architecture.rem_pct}%)** — ${analysis.sleep_architecture.rem_pct >= 20 ? 'Great mental restoration' : 'Light consolidation'}\n\n` +
+        `**Tonight's Sleep Suggestions:**\n` +
+        `• Start dimming screens at **${times.windDown}**\n` +
+        `• Target lights-out by **${times.lightsOut}** (sleep need: ${Math.floor(analysis.sleep_architecture.need_total_min / 60)}h ${analysis.sleep_architecture.need_total_min % 60}m)`;
     } else if (isNutrition) {
-      // 🥩 Nutrition & Hypertrophy Fueling
-      reply = `### 🥩 WHOOP Coach: Hypertrophy Nutrition & Macronutrient Fueling\n\n` +
-        `**Athlete Profile:** Body Weight **${weightKg} kg (${Math.round(weightKg * 2.20462)} lbs)** | Height **${user.body?.height_meter || 1.70}m**\n\n` +
-        `**Personalized Daily Targets (Aragon–McDonald Hypertrophy Framework):**\n` +
-        `• **Target Protein:** **${optimalProtein}g / day** (2.0 g/kg body weight)\n` +
-        `  *Rationale: Optimizes muscle protein synthesis (MPS) and leucine thresholds without excessive nitrogen waste.*\n` +
-        `• **Target Calories:** **${targetCalories} kcal** (Includes lean surplus for muscular fiber remodeling)\n` +
-        `• **Target Carbohydrates:** **~${Math.round((targetCalories * 0.45) / 4)}g** (glycogen resynthesis & anti-catabolic insulin signaling)\n` +
-        `• **Target Fats:** **~${Math.round(weightKg * 1.0)}g** (essential fatty acids for testosterone synthesis)\n\n`;
-
-      if (loggedCalories > 0 || loggedProtein > 0) {
-        reply += `**Today's Tracked Intake:**\n` +
-          `• Calories Logged: **${loggedCalories} / ${targetCalories} kcal** (${targetCalories - loggedCalories > 0 ? `${targetCalories - loggedCalories} kcal remaining` : 'Target reached!'})\n` +
-          `• Protein Logged: **${loggedProtein} / ${optimalProtein}g** (${optimalProtein - loggedProtein > 0 ? `${optimalProtein - loggedProtein}g remaining` : 'Target hit! 🎯'})\n\n`;
-      } else {
-        reply += `*Tip: Track your food intake in Tab 4 (Hypertrophy Lab) using the updated "Save Daily Intake" button below.*\n\n`;
-      }
-
-      reply += `**Nutrient Timing Guidelines:**\n` +
-        `1. **Post-Workout Window:** Ingest 30–40g of complete protein containing ≥3g leucine within 2 hours of training.\n` +
-        `2. **Dinner Cutoff:** Complete your final calorie intake by **${times.dinnerCutoff}** to prevent nocturnal digestive thermogenesis.\n` +
-        `3. **Hydration & Electrolytes:** Consume at least 2.5–3.0L of water with sodium and potassium to support vascular stroke volume.`;
-
+      reply = `${historyPrefix}For your body weight (${weightKg} kg), here are your daily nutrition anchors:\n\n` +
+        `• **Protein Target:** **${optimalProtein}g / day** (supports muscle repair and satiety)\n` +
+        `• **Energy Target:** **${targetCalories} kcal** (supports current strain demands)\n\n` +
+        `**Practical Suggestions:**\n` +
+        `1. Include 30–35g of protein in your main meals today\n` +
+        `2. Finish heavier calories by **${times.dinnerCutoff}** so digestion doesn't spike nocturnal heart rate\n` +
+        `3. Keep water and electrolytes steady throughout the afternoon.`;
+    } else if (isBreath || isVitals) {
+      reply = `${historyPrefix}Your autonomic state is currently **${analysis.stress.title}** with HRV at **${analysis.recovery.hrv} ms** and resting heart rate at **${analysis.recovery.rhr} bpm**.\n\n` +
+        `**Suggested Breathwork Protocol:**\n` +
+        `• **${analysis.breathwork.name}** (${analysis.breathwork.duration_min} minutes, ${analysis.breathwork.cycles} cycles)\n` +
+        `• ${analysis.breathwork.instructions}\n\n` +
+        `*Tip: Launch the live vagal pacer in the Recovery Lab to follow along with the rhythm.*`;
     } else if (isHabits) {
-      // 🧬 Habit Correlations & Lifestyle Impact
-      reply = `### 🧬 WHOOP Coach: Evidence-Based Habit Correlations\n\n` +
-        `Based on your wearable tracking history and peer-reviewed sports physiology:\n\n` +
-        `**Top Positive Recovery Catalysts:**\n` +
-        `• **Morning Sunlight (15 min):** Sets the suprachiasmatic nucleus circadian clock. Increases evening melatonin amplitude and extends deep sleep by **+15 minutes**.\n` +
-        `• **Cold Plunge / Cold Shower (3 min):** Stimulates the vagal nerve and triggers a parasympathetic rebound, raising next-day HRV by **+14%**.\n` +
-        `• **Magnesium Bisglycinate (400mg):** Agonizes GABA receptors in the brain, lengthening restorative Slow Wave Sleep by **+16%**.\n` +
-        `• **Consistent Bedtime (±30m):** Eliminates circadian social jetlag, increasing average recovery score by **+11%**.\n\n` +
-        `**Top Recovery Suppressors:**\n` +
-        `• **Alcohol within 6 Hours of Bed:** Destroys REM sleep, triggers nocturnal sympathetic tachycardia, elevates resting HR by **+5 to +8 bpm**, and crashes HRV by up to **-25%**.\n` +
-        `• **Late Night Meals (<3h pre-bed):** Forces nocturnal splanchnic digestion, keeping core body temperature elevated and blunting deep sleep.\n` +
-        `• **Late Screen Exposure:** 450–480nm blue light suppresses endogenous melatonin by up to 50%, delaying sleep onset latency by 20–35 minutes.`;
-
-    } else if (isVitals || isBreath) {
-      // 🫁 Vitals, HRV, & Breathwork
-      reply = `### 🫁 WHOOP Coach: Autonomic Telemetry & Vagal Tone Analysis\n\n` +
-        `**Autonomic Assessment:** **${analysis.stress.title}** (${analysis.stress.state})\n\n` +
-        `• **Heart Rate Variability (HRV):** **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs 7-day average of ${analysis.recovery.avgHrv7} ms).\n` +
-        `• **Resting Heart Rate:** **${analysis.recovery.rhr} bpm** (${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm shift vs 7d average of ${analysis.recovery.avgRhr7} bpm).\n` +
-        `• **Respiratory Rate:** **${analysis.sleep_architecture.resp_rate} rpm** (${analysis.sleep_architecture.resp_delta >= 0 ? '+' : ''}${analysis.sleep_architecture.resp_delta} rpm shift).\n\n` +
-        `**Prescribed Breathwork Protocol:**\n` +
-        `• **Protocol:** **${analysis.breathwork.name}** (${analysis.breathwork.category})\n` +
-        `• **Duration:** ${analysis.breathwork.duration_min} minutes (${analysis.breathwork.cycles} cycles)\n` +
-        `• **Technique:** ${analysis.breathwork.instructions}\n` +
-        `• **Biological Mechanism:** ${analysis.breathwork.mechanism}\n\n` +
-        `Head over to **Tab 2 (Recovery & HRV Lab)** to launch the dynamic neuro-respiratory pacer.`;
-
+      reply = `${historyPrefix}Here are 3 small habits that have the biggest positive impact on your recovery:\n\n` +
+        `1. **Morning Sunlight (10-15m):** Anchors your circadian clock and deepens slow-wave sleep tonight\n` +
+        `2. **Early Dinner (by ${times.dinnerCutoff}):** Lowers nocturnal resting heart rate and boosts next-day HRV\n` +
+        `3. **Consistent Bedtime (±20m):** Keeps your internal rhythm in sync for smoother wake-ups.`;
     } else {
-      // ⚡ Comprehensive Daily Briefing
-      reply = `### ⚡ WHOOP Coach: Comprehensive Daily Briefing (${analysis.date})\n\n` +
-        `**1. Autonomic Recovery:** **${analysis.recovery.score}% (${analysis.recovery.category})**\n` +
-        `• HRV is **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs 7-day baseline of ${analysis.recovery.avgHrv7} ms).\n` +
-        `• Resting HR is **${analysis.recovery.rhr} bpm** (${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm shift).\n` +
-        `• Autonomic State: **${analysis.stress.title}**.\n\n` +
-        `**2. Training Capacity:** Target Day Strain **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}**\n` +
-        `• Current Strain: **${analysis.training.dayStrain}**.\n` +
-        `• Guidance: ${analysis.recovery.score >= 67 ? 'Green light for high-strain training and heavy resistance work.' : (analysis.recovery.score >= 34 ? 'Moderate aerobic or maintenance training. Keep strain capped within target.' : 'Active recovery only. Prioritize parasympathetic downtime.')}\n\n` +
-        `**3. Sleep Architecture:** Total Asleep **${analysis.sleep_architecture.total_asleep_hours}h** (${Math.round((analysis.sleep_architecture.total_asleep_min / (analysis.sleep_architecture.need_total_min || 480)) * 100)}% of need)\n` +
-        `• Deep Sleep: **${analysis.sleep_architecture.sws_min}m (${analysis.sleep_architecture.deep_pct}%)** | REM: **${analysis.sleep_architecture.rem_min}m (${analysis.sleep_architecture.rem_pct}%)**\n` +
-        `• Sleep Debt: **+${analysis.sleep_architecture.debt_min}m** | Tonight's Need: **${Math.floor(analysis.sleep_architecture.need_total_min / 60)}h ${analysis.sleep_architecture.need_total_min % 60}m**\n\n` +
-        `**4. Actionable Next Steps:**\n` +
-        `• **Breathwork:** Perform 5 minutes of **${analysis.breathwork.name}** in Tab 2 to stimulate the vagal brake.\n` +
-        `• **Nutrition:** Target **${optimalProtein}g Protein** and **${targetCalories} kcal** today.\n` +
-        `• **Target Lights-Out:** Bedtime by **${times.lightsOut}** (wind-down starts at **${times.windDown}**).`;
+      reply = `${historyPrefix}Here is your quick daily briefing for today:\n\n` +
+        `• **Recovery:** **${analysis.recovery.score}% (${analysis.recovery.category})** | HRV: **${analysis.recovery.hrv} ms**\n` +
+        `• **Strain Target:** **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}** (Current: ${analysis.training.dayStrain})\n` +
+        `• **Sleep:** **${analysis.sleep_architecture.total_asleep_hours}h** (+${analysis.sleep_architecture.debt_min}m debt)\n\n` +
+        `**Suggestions for Today:**\n` +
+        `1. Aim for **${optimalProtein}g Protein** and finish dinner by **${times.dinnerCutoff}**\n` +
+        `2. Try 5 minutes of **${analysis.breathwork.name}** to settle the nervous system\n` +
+        `3. Target lights-out by **${times.lightsOut}**.`;
     }
 
     return {
