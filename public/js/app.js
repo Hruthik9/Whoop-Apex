@@ -45,6 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadCorrelations();
   await loadHypertrophyData();
   await loadAICoachInsights();
+  initPacerEngine('sigh');
 });
 
 function checkQueryParams() {
@@ -123,11 +124,44 @@ function initEventListeners() {
   // Action Buttons
   document.getElementById('btn-connect').addEventListener('click', () => {
     if (state.activeProvider === 'google_fitbit') {
-      window.location.href = '/api/auth/google/login';
+      const modal = document.getElementById('modal-fitbit-connect');
+      if (modal) modal.classList.remove('hidden');
     } else {
       window.location.href = '/api/auth/login';
     }
   });
+
+  // Fitbit Connect Modal Listeners
+  const btnCloseFitbitModal = document.getElementById('btn-close-fitbit-modal');
+  if (btnCloseFitbitModal) {
+    btnCloseFitbitModal.addEventListener('click', () => {
+      const modal = document.getElementById('modal-fitbit-connect');
+      if (modal) modal.classList.add('hidden');
+    });
+  }
+
+  const btnFitbitUseDemo = document.getElementById('btn-fitbit-use-demo');
+  if (btnFitbitUseDemo) {
+    btnFitbitUseDemo.addEventListener('click', () => {
+      const modal = document.getElementById('modal-fitbit-connect');
+      if (modal) modal.classList.add('hidden');
+      const banner = document.getElementById('alert-banner');
+      const msg = document.getElementById('alert-message');
+      if (banner && msg) {
+        banner.classList.remove('hidden');
+        banner.style.borderColor = 'rgba(0, 240, 118, 0.4)';
+        banner.style.background = 'rgba(0, 240, 118, 0.15)';
+        msg.textContent = 'Active: 30-Day Simulated Google Pixel Watch / Fitbit Sense 2 Biometrics.';
+      }
+    });
+  }
+
+  const btnFitbitOAuth = document.getElementById('btn-fitbit-oauth-login');
+  if (btnFitbitOAuth) {
+    btnFitbitOAuth.addEventListener('click', () => {
+      window.location.href = '/api/auth/google/login';
+    });
+  }
 
   document.getElementById('btn-sync').addEventListener('click', async () => {
     await syncWearableData();
@@ -168,33 +202,47 @@ function initEventListeners() {
     });
   }
 
-  // Guided Breathing Pacer Modal Listeners
+  // Overview Breathwork Button -> switches to Recovery tab and scrolls to Pacer Lab
   const btnOpenPacer = document.getElementById('btn-open-breath-pacer');
   if (btnOpenPacer) {
     btnOpenPacer.addEventListener('click', () => {
-      openBreathingPacer();
+      switchTab('recovery');
+      const lab = document.getElementById('vagal-pacer-lab');
+      if (lab) {
+        lab.scrollIntoView({ behavior: 'smooth' });
+        lab.style.borderColor = '#306EE8';
+        lab.style.boxShadow = '0 0 35px rgba(48, 110, 232, 0.45)';
+        setTimeout(() => {
+          lab.style.borderColor = '';
+          lab.style.boxShadow = '';
+        }, 2500);
+      }
     });
   }
 
-  const btnClosePacer = document.getElementById('btn-close-pacer');
-  if (btnClosePacer) {
-    btnClosePacer.addEventListener('click', () => {
-      closeBreathingPacer();
-    });
+  // Pacer Protocol Selector Buttons
+  const btnProtoSigh = document.getElementById('btn-proto-sigh');
+  if (btnProtoSigh) {
+    btnProtoSigh.addEventListener('click', () => selectPacerProtocol('sigh'));
+  }
+  const btnProto478 = document.getElementById('btn-proto-478');
+  if (btnProto478) {
+    btnProto478.addEventListener('click', () => selectPacerProtocol('478'));
+  }
+  const btnProtoBox = document.getElementById('btn-proto-box');
+  if (btnProtoBox) {
+    btnProtoBox.addEventListener('click', () => selectPacerProtocol('box'));
   }
 
-  const btnFinishPacer = document.getElementById('btn-pacer-finish');
-  if (btnFinishPacer) {
-    btnFinishPacer.addEventListener('click', () => {
-      closeBreathingPacer();
-    });
+  // Pacer Controls (In-Page)
+  const btnPacerMain = document.getElementById('btn-pacer-main');
+  if (btnPacerMain) {
+    btnPacerMain.addEventListener('click', () => togglePacerSession());
   }
 
-  const btnTogglePacer = document.getElementById('btn-pacer-toggle');
-  if (btnTogglePacer) {
-    btnTogglePacer.addEventListener('click', () => {
-      toggleBreathingPacer();
-    });
+  const btnPacerReset = document.getElementById('btn-pacer-reset');
+  if (btnPacerReset) {
+    btnPacerReset.addEventListener('click', () => resetPacerSession());
   }
 
   const btnDismissAlert = document.getElementById('btn-dismiss-alert');
@@ -2115,7 +2163,14 @@ function renderAICoachInsights(insights) {
     if (elDuration) elDuration.textContent = durationText;
     if (elDesc) elDesc.textContent = insights.breathwork.instructions;
 
-    state.pacer.protocol = insights.breathwork;
+    const bName = (insights.breathwork.name || '').toLowerCase();
+    if (bName.includes('4-7-8') || bName.includes('vagal')) {
+      selectPacerProtocol('478', false);
+    } else if (bName.includes('box')) {
+      selectPacerProtocol('box', false);
+    } else {
+      selectPacerProtocol('sigh', false);
+    }
   }
 
   // Sleep Work Card
@@ -2190,93 +2245,161 @@ async function handleAICoachQuery(prompt) {
 }
 
 // -------------------------------------------------------------
-// Guided Breathing Pacer Engine
+// Autonomic Vagal Regulation & Guided Breathwork Engine (In-Page)
 // -------------------------------------------------------------
 
-function getPacerPhasesForProtocol(protocolName) {
-  const name = (protocolName || '').toLowerCase();
-  if (name.includes('4-7-8') || name.includes('vagal')) {
-    return [
-      { name: 'Inhale Nose', duration: 4, scale: 1.4, glow: 0.5, instruction: 'Inhale quietly through nose' },
-      { name: 'Hold Breath', duration: 7, scale: 1.4, glow: 0.7, instruction: 'Hold breath steadily' },
-      { name: 'Whoosh Exhale', duration: 8, scale: 0.85, glow: 0.2, instruction: 'Exhale completely with whoosh sound' }
-    ];
-  } else if (name.includes('box') || name.includes('4-4-4-4')) {
-    return [
-      { name: 'Inhale', duration: 4, scale: 1.35, glow: 0.5, instruction: 'Inhale smooth and even' },
-      { name: 'Hold Full', duration: 4, scale: 1.35, glow: 0.6, instruction: 'Hold breath comfortably' },
-      { name: 'Exhale', duration: 4, scale: 0.85, glow: 0.2, instruction: 'Smooth, even exhale' },
-      { name: 'Hold Empty', duration: 4, scale: 0.85, glow: 0.3, instruction: 'Hold breath lungs empty' }
-    ];
-  } else {
-    // Default: Cyclic Physiological Sigh
-    return [
-      { name: 'Inhale Nose', duration: 2, scale: 1.25, glow: 0.4, instruction: 'Inhale deeply through your nose' },
-      { name: 'Top-Off Sip', duration: 1, scale: 1.48, glow: 0.8, instruction: 'Take a second quick sip of air at the top' },
+const PACER_PROTOCOLS = {
+  sigh: {
+    key: 'sigh',
+    title: 'Cyclic Physiological Sigh',
+    purpose: 'Acute Cortisol Reduction & Parasympathetic Tone Boost',
+    cadence: '2s Inhale • 1s Sip • 6s Slow Exhale',
+    durationText: '5 min • 25 cycles',
+    totalCycles: 25,
+    phases: [
+      { name: 'Inhale Nose', duration: 2, scale: 1.28, glow: 0.5, instruction: 'Inhale deeply through your nose' },
+      { name: 'Top-Off Sip', duration: 1, scale: 1.5, glow: 0.9, instruction: 'Take a second quick sip of air at the top' },
       { name: 'Slow Sigh Out', duration: 6, scale: 0.85, glow: 0.15, instruction: 'Slowly sigh all air out through your mouth' }
-    ];
+    ]
+  },
+  '478': {
+    key: '478',
+    title: '4-7-8 Vagal Nerve Reset',
+    purpose: 'Circadian Sleep Priming & Deep Sleep Consolidation',
+    cadence: '4s Inhale • 7s Hold • 8s Exhale',
+    durationText: '3 min • 8 cycles',
+    totalCycles: 8,
+    phases: [
+      { name: 'Inhale Nose', duration: 4, scale: 1.4, glow: 0.5, instruction: 'Inhale silently through the nose' },
+      { name: 'Hold Breath', duration: 7, scale: 1.4, glow: 0.7, instruction: 'Hold breath with relaxed diaphragm' },
+      { name: 'Whoosh Exhale', duration: 8, scale: 0.85, glow: 0.2, instruction: 'Exhale completely with whoosh sound' }
+    ]
+  },
+  box: {
+    key: 'box',
+    title: 'Box Breathing (4-4-4-4)',
+    purpose: 'Autonomic Nervous System Stabilization & Focus',
+    cadence: '4s Inhale • 4s Hold • 4s Exhale • 4s Empty',
+    durationText: '4 min • 12 cycles',
+    totalCycles: 12,
+    phases: [
+      { name: 'Inhale', duration: 4, scale: 1.35, glow: 0.5, instruction: 'Inhale smooth and even through nose' },
+      { name: 'Hold Full', duration: 4, scale: 1.35, glow: 0.6, instruction: 'Hold breath comfortably' },
+      { name: 'Exhale', duration: 4, scale: 0.85, glow: 0.2, instruction: 'Smooth, slow exhale through mouth' },
+      { name: 'Hold Empty', duration: 4, scale: 0.85, glow: 0.3, instruction: 'Hold breath with lungs empty' }
+    ]
+  }
+};
+
+function selectPacerProtocol(protocolKey, resetTimer = true) {
+  const proto = PACER_PROTOCOLS[protocolKey] || PACER_PROTOCOLS.sigh;
+  state.pacer.selectedKey = proto.key;
+  state.pacer.protocol = proto;
+  state.pacer.phases = proto.phases;
+  state.pacer.totalCycles = proto.totalCycles;
+
+  // Update switcher buttons UI
+  ['sigh', '478', 'box'].forEach(k => {
+    const btn = document.getElementById(`btn-proto-${k}`);
+    if (btn) {
+      if (k === proto.key) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+  });
+
+  // Update Intel Card
+  const elTitle = document.getElementById('pacer-protocol-title');
+  const elPurpose = document.getElementById('pacer-protocol-purpose');
+  const elCadence = document.getElementById('pacer-protocol-cadence');
+  const elDur = document.getElementById('pacer-protocol-duration');
+  const elTotCycles = document.getElementById('pacer-total-cycles');
+
+  if (elTitle) elTitle.textContent = proto.title;
+  if (elPurpose) elPurpose.textContent = proto.purpose;
+  if (elCadence) elCadence.textContent = proto.cadence;
+  if (elDur) elDur.textContent = proto.durationText;
+  if (elTotCycles) elTotCycles.textContent = proto.totalCycles;
+
+  if (resetTimer) {
+    resetPacerSession();
   }
 }
 
-function openBreathingPacer() {
-  const modal = document.getElementById('modal-breath-pacer');
-  if (!modal) return;
-
-  const protocol = state.pacer.protocol || { name: 'Cyclic Physiological Sigh', instructions: 'Two quick inhales through the nose followed by a slow, passive sigh out through the mouth.' };
-  const phases = getPacerPhasesForProtocol(protocol.name);
-
-  state.pacer.phases = phases;
-  state.pacer.phaseIndex = 0;
-  state.pacer.currentCycle = 1;
-  state.pacer.totalCycles = protocol.name.includes('4-7-8') ? 8 : (protocol.name.includes('box') ? 12 : 25);
-  state.pacer.secondsLeft = phases[0].duration;
-  state.pacer.paused = false;
-  state.pacer.active = true;
-
-  const elTitle = document.getElementById('pacer-protocol-title');
-  const elInst = document.getElementById('pacer-instructions');
-  const elCurCycle = document.getElementById('pacer-current-cycle');
-  const elTotCycles = document.getElementById('pacer-total-cycles');
-  const btnToggle = document.getElementById('btn-pacer-toggle');
-
-  if (elTitle) elTitle.textContent = protocol.name;
-  if (elInst) elInst.textContent = phases[0].instruction;
-  if (elCurCycle) elCurCycle.textContent = '1';
-  if (elTotCycles) elTotCycles.textContent = state.pacer.totalCycles;
-  if (btnToggle) btnToggle.textContent = 'Pause';
-
-  modal.classList.remove('hidden');
-  applyPacerPhaseUI(phases[0]);
-
-  if (state.pacer.intervalId) clearInterval(state.pacer.intervalId);
-  state.pacer.intervalId = setInterval(tickPacer, 1000);
+function initPacerEngine(protocolKey = 'sigh') {
+  selectPacerProtocol(protocolKey, true);
 }
 
-function closeBreathingPacer() {
-  const modal = document.getElementById('modal-breath-pacer');
-  if (modal) modal.classList.add('hidden');
+function togglePacerSession() {
+  if (!state.pacer.active) {
+    state.pacer.active = true;
+    state.pacer.paused = false;
+    state.pacer.currentCycle = 1;
+    state.pacer.phaseIndex = 0;
+    const currentPhase = state.pacer.phases[0];
+    state.pacer.secondsLeft = currentPhase.duration;
 
+    updatePacerControlsUI(true, false);
+    applyPacerPhaseUI(currentPhase);
+
+    if (state.pacer.intervalId) clearInterval(state.pacer.intervalId);
+    state.pacer.intervalId = setInterval(tickPacer, 1000);
+  } else if (state.pacer.paused) {
+    state.pacer.paused = false;
+    updatePacerControlsUI(true, false);
+  } else {
+    state.pacer.paused = true;
+    updatePacerControlsUI(true, true);
+  }
+}
+
+function resetPacerSession() {
   if (state.pacer.intervalId) {
     clearInterval(state.pacer.intervalId);
     state.pacer.intervalId = null;
   }
   state.pacer.active = false;
   state.pacer.paused = false;
+  state.pacer.currentCycle = 0;
+  state.pacer.phaseIndex = 0;
+  state.pacer.secondsLeft = 0;
 
+  updatePacerControlsUI(false, false);
+
+  const elTimer = document.getElementById('pacer-timer');
+  const elPhase = document.getElementById('pacer-phase');
+  const elInst = document.getElementById('pacer-instructions');
+  const elCurCycle = document.getElementById('pacer-current-cycle');
+  const elProgBar = document.getElementById('pacer-progress-bar');
   const circle = document.getElementById('pacer-circle');
+  const glow = document.getElementById('pacer-glow');
+
+  if (elTimer) elTimer.textContent = '--';
+  if (elPhase) elPhase.textContent = 'Get Ready';
+  if (elInst) elInst.textContent = 'Click "Start Breathing Session" below to begin neuro-respiratory regulation.';
+  if (elCurCycle) elCurCycle.textContent = '0';
+  if (elProgBar) elProgBar.style.width = '0%';
   if (circle) {
+    circle.style.transition = 'transform 0.5s ease-out';
     circle.style.transform = 'scale(1)';
   }
+  if (glow) glow.style.opacity = '0.3';
 }
 
-function toggleBreathingPacer() {
-  const btnToggle = document.getElementById('btn-pacer-toggle');
-  if (state.pacer.paused) {
-    state.pacer.paused = false;
-    if (btnToggle) btnToggle.textContent = 'Pause';
+function updatePacerControlsUI(isActive, isPaused) {
+  const btnMainText = document.getElementById('btn-pacer-main-text');
+  const statusText = document.getElementById('pacer-status-text');
+
+  if (!btnMainText) return;
+
+  if (!isActive) {
+    btnMainText.textContent = '▶ Start Breathing Session';
+    if (statusText) statusText.textContent = 'Standby';
+  } else if (isPaused) {
+    btnMainText.textContent = '▶ Resume Session';
+    if (statusText) statusText.textContent = 'Session Paused';
   } else {
-    state.pacer.paused = true;
-    if (btnToggle) btnToggle.textContent = 'Resume';
+    btnMainText.textContent = '⏸ Pause Session';
+    if (statusText) statusText.textContent = 'Live Pacing Active';
   }
 }
 
@@ -2284,12 +2407,20 @@ function applyPacerPhaseUI(phase) {
   const elPhase = document.getElementById('pacer-phase');
   const elTimer = document.getElementById('pacer-timer');
   const elInst = document.getElementById('pacer-instructions');
+  const elCurCycle = document.getElementById('pacer-current-cycle');
+  const elProgBar = document.getElementById('pacer-progress-bar');
   const circle = document.getElementById('pacer-circle');
   const glow = document.getElementById('pacer-glow');
 
   if (elPhase) elPhase.textContent = phase.name;
-  if (elTimer) elTimer.textContent = state.pacer.secondsLeft;
+  if (elTimer) elTimer.textContent = `${state.pacer.secondsLeft}s`;
   if (elInst) elInst.textContent = phase.instruction;
+  if (elCurCycle) elCurCycle.textContent = state.pacer.currentCycle;
+
+  if (elProgBar && state.pacer.totalCycles) {
+    const pct = Math.min(100, Math.round((state.pacer.currentCycle / state.pacer.totalCycles) * 100));
+    elProgBar.style.width = `${pct}%`;
+  }
 
   if (circle) {
     circle.style.transition = `transform ${phase.duration}s cubic-bezier(0.4, 0, 0.2, 1)`;
@@ -2305,19 +2436,19 @@ function tickPacer() {
 
   state.pacer.secondsLeft -= 1;
   const elTimer = document.getElementById('pacer-timer');
-  if (elTimer) elTimer.textContent = Math.max(0, state.pacer.secondsLeft);
+  if (elTimer) elTimer.textContent = `${Math.max(0, state.pacer.secondsLeft)}s`;
 
   if (state.pacer.secondsLeft <= 0) {
     state.pacer.phaseIndex += 1;
     if (state.pacer.phaseIndex >= state.pacer.phases.length) {
       state.pacer.phaseIndex = 0;
       state.pacer.currentCycle += 1;
-      const elCurCycle = document.getElementById('pacer-current-cycle');
-      if (elCurCycle) elCurCycle.textContent = state.pacer.currentCycle;
 
       if (state.pacer.currentCycle > state.pacer.totalCycles) {
-        closeBreathingPacer();
-        alert('🎉 Guided Breathing Protocol Complete! Autonomic tone down-regulated.');
+        resetPacerSession();
+        const statusText = document.getElementById('pacer-status-text');
+        if (statusText) statusText.textContent = 'Session Complete! 🎉';
+        alert('🎉 Neuro-Respiratory Session Complete! Autonomic tone down-regulated.');
         return;
       }
     }

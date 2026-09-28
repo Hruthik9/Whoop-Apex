@@ -106,9 +106,18 @@ app.get('/api/auth/google/login', (req, res) => {
     const authUrl = googleHealthService.getAuthorizationUrl();
     res.redirect(authUrl);
   } catch (err) {
-    console.error('Error generating Google/Fitbit auth URL:', err);
-    res.status(500).json({ error: 'Failed to generate Google/Fitbit auth URL', details: err.message });
+    console.warn('Google/Fitbit auth redirect warning:', err.message);
+    res.redirect(`/?auth_error=${encodeURIComponent('Fitbit / Google credentials not found in .env. Please configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET or use pre-seeded 30-day biometrics.')}`);
   }
+});
+
+app.get('/api/auth/google/status', (req, res) => {
+  res.json({
+    configured: !!(googleHealthService.clientId && googleHealthService.clientSecret),
+    client_id_set: !!googleHealthService.clientId,
+    redirect_uri: googleHealthService.redirectUri,
+    provider: db.getActiveProvider()
+  });
 });
 
 app.get('/api/auth/google/callback', async (req, res) => {

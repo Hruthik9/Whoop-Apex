@@ -3182,32 +3182,111 @@ body {
 }
 
 /* ========================================================================= */
-/* Guided Breathing Pacer Modal */
+/* Autonomic Vagal Regulation & Guided Breathwork Lab (In-Page) */
 /* ========================================================================= */
-.pacer-modal-card {
-  max-width: 460px;
-  width: 90%;
-  background: #111318;
-  border: 1px solid rgba(48, 110, 232, 0.35);
-  border-radius: 28px;
-  padding: 30px;
-  text-align: center;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
-  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+.card-vagal-pacer {
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
 }
 
-.pacer-modal-header {
+.vagal-pacer-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.vagal-live-chip {
+  font-size: 11px;
+  color: #00F076;
+  background: rgba(0, 240, 118, 0.12);
+  border: 1px solid rgba(0, 240, 118, 0.25);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.protocol-switcher {
+  display: flex;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.protocol-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.protocol-btn:hover {
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.protocol-btn.active {
+  background: #306EE8;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(48, 110, 232, 0.4);
+}
+
+.protocol-intel-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-top: 20px;
+}
+
+.intel-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   text-align: left;
+}
+
+.intel-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.intel-val {
+  font-size: 13px;
+  color: #FFFFFF;
+}
+
+.pacer-chamber {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .pacer-animation-container {
   position: relative;
   width: 220px;
   height: 220px;
-  margin: 28px auto;
+  margin: 16px auto;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -3218,62 +3297,100 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(48, 110, 232, 0.25) 0%, transparent 70%);
-  animation: pulseGlow 4s infinite ease-in-out;
+  background: radial-gradient(circle, rgba(48, 110, 232, 0.35) 0%, transparent 70%);
+  opacity: 0.3;
+  transition: opacity 0.8s ease;
 }
 
 .pacer-circle {
-  width: 130px;
-  height: 130px;
+  width: 140px;
+  height: 140px;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(48, 110, 232, 0.2), rgba(0, 240, 118, 0.15));
+  background: linear-gradient(135deg, rgba(48, 110, 232, 0.25), rgba(0, 240, 118, 0.2));
   border: 2px solid #306EE8;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 0 20px rgba(48, 110, 232, 0.3);
-  transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 25px rgba(48, 110, 232, 0.35);
+  transform: scale(1);
+  will-change: transform;
 }
 
 .pacer-phase-text {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #FFFFFF;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .pacer-timer-number {
   font-family: var(--font-mono);
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 800;
   color: #60A5FA;
   margin-top: 2px;
 }
 
-.pacer-instructions-box {
-  margin-bottom: 22px;
+.pacer-guidance-box {
+  width: 100%;
+  max-width: 480px;
+  margin: 12px auto 20px auto;
 }
 
-.pacer-cycle-tracker {
-  margin-top: 8px;
-  font-size: 12px;
+.pacer-instructions {
+  font-size: 13.5px;
   color: var(--text-secondary);
+  line-height: 1.5;
+  min-height: 40px;
+  margin-bottom: 12px;
 }
 
-.pacer-cycle-tracker strong {
+.pacer-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.cycle-pill {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cycle-pill strong {
   color: #FFFFFF;
 }
 
-.pacer-controls-row {
+.pacer-progress-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pacer-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #306EE8, #00F076);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.pacer-status-text {
+  font-size: 11px;
+  color: #60A5FA;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pacer-actions-row {
   display: flex;
   gap: 12px;
   justify-content: center;
-}
-
-@keyframes pulseGlow {
-  0%, 100% { opacity: 0.4; transform: scale(0.95); }
-  50% { opacity: 0.9; transform: scale(1.05); }
+  align-items: center;
 }
 
 /* Responsive adjustments */

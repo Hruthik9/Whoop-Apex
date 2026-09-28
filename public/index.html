@@ -375,8 +375,8 @@
               </div>
               <p class="ai-card-body-text" id="ai-breath-desc">Two quick inhales through the nose followed by a slow, passive sigh out through the mouth. Drops heart rate and suppresses acute sympathetic cortisol surge.</p>
               <button type="button" class="btn-start-pacer" id="btn-open-breath-pacer">
-                <span>🫁 Start Guided Breathing Pacer</span>
-                <span class="arrow-icon">↗</span>
+                <span>🫁 Open Vagal Pacer in Recovery Lab</span>
+                <span class="arrow-icon">➔</span>
               </button>
             </div>
 
@@ -488,6 +488,87 @@
           <div class="tier-segment segment-green" id="tier-bar-green" style="width: 33%;">Green (<span id="count-green">0</span>)</div>
           <div class="tier-segment segment-yellow" id="tier-bar-yellow" style="width: 33%;">Yellow (<span id="count-yellow">0</span>)</div>
           <div class="tier-segment segment-red" id="tier-bar-red" style="width: 34%;">Red (<span id="count-red">0</span>)</div>
+        </div>
+      </div>
+
+      <!-- 4. Autonomic Vagal Regulation & Live Guided Breathwork Pacer -->
+      <div class="card-glass vagal-pacer-card" id="vagal-pacer-lab" style="margin-top: 24px; padding: 26px; border: 1px solid rgba(48, 110, 232, 0.25); background: linear-gradient(180deg, rgba(26, 29, 36, 0.85) 0%, rgba(17, 19, 24, 0.95) 100%);">
+        <div class="vagal-pacer-header">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+              <span class="card-tag">AUTONOMIC VAGAL REGULATION</span>
+              <span class="vagal-live-chip" id="vagal-live-chip">● Live Biofeedback</span>
+            </div>
+            <h3 style="font-family: var(--font-display); font-size: 19px; color: #FFFFFF; font-weight: 700; margin: 0;">Neuro-Respiratory Vagal Nerve Pacer</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-top: 4px; margin-bottom: 0;">Active parasympathetic tone stimulation and baroreflex modulation calibrated to your latest nocturnal HRV.</p>
+          </div>
+          <!-- Protocol Selector Buttons -->
+          <div class="protocol-switcher" role="group" aria-label="Select Protocol">
+            <button type="button" class="protocol-btn active" data-protocol="sigh" id="btn-proto-sigh">
+              <span>⚡ Cyclic Sigh (2-1-6)</span>
+            </button>
+            <button type="button" class="protocol-btn" data-protocol="478" id="btn-proto-478">
+              <span>🌙 4-7-8 Vagal Reset</span>
+            </button>
+            <button type="button" class="protocol-btn" data-protocol="box" id="btn-proto-box">
+              <span>🎯 Box (4-4-4-4)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Protocol Clinical Intelligence Card -->
+        <div class="protocol-intel-card">
+          <div class="intel-col">
+            <span class="intel-label">Active Protocol</span>
+            <strong class="intel-val" id="pacer-protocol-title">Cyclic Physiological Sigh</strong>
+          </div>
+          <div class="intel-col">
+            <span class="intel-label">Clinical Purpose</span>
+            <span class="intel-val" id="pacer-protocol-purpose">Acute Cortisol Reduction & Parasympathetic Engagement</span>
+          </div>
+          <div class="intel-col">
+            <span class="intel-label">Cadence</span>
+            <span class="intel-val" id="pacer-protocol-cadence">2s Inhale • 1s Sip • 6s Slow Exhale</span>
+          </div>
+          <div class="intel-col">
+            <span class="intel-label">Session Target</span>
+            <span class="intel-val" id="pacer-protocol-duration">5 min • 25 cycles</span>
+          </div>
+        </div>
+
+        <!-- The Live Animated Breathing Chamber -->
+        <div class="pacer-chamber">
+          <div class="pacer-animation-container">
+            <div class="pacer-outer-glow" id="pacer-glow"></div>
+            <div class="pacer-circle" id="pacer-circle">
+              <span class="pacer-phase-text" id="pacer-phase">Get Ready</span>
+              <span class="pacer-timer-number" id="pacer-timer">--</span>
+            </div>
+          </div>
+
+          <!-- Dynamic Phase Guidance & Progress -->
+          <div class="pacer-guidance-box">
+            <p class="pacer-instructions" id="pacer-instructions">Click "Start Breathing Session" below to begin neuro-respiratory regulation.</p>
+            <div class="pacer-progress-row">
+              <div class="cycle-pill">
+                Cycle: <strong id="pacer-current-cycle">0</strong> / <span id="pacer-total-cycles">25</span>
+              </div>
+              <div class="pacer-progress-bar-wrap">
+                <div class="pacer-progress-bar" id="pacer-progress-bar" style="width: 0%;"></div>
+              </div>
+              <div class="pacer-status-text" id="pacer-status-text">Standby</div>
+            </div>
+          </div>
+
+          <!-- Control Buttons -->
+          <div class="pacer-actions-row">
+            <button type="button" class="btn btn-primary" id="btn-pacer-main" style="padding: 10px 24px; font-weight: 700; font-size: 14px;">
+              <span id="btn-pacer-main-text">▶ Start Breathing Session</span>
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-pacer-reset" style="padding: 10px 18px; font-size: 13px;">
+              <span>↻ Reset</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1152,37 +1233,53 @@
     </div>
   </div>
 
-  <!-- Guided Breathing Pacer Modal -->
-  <div id="modal-breath-pacer" class="modal-overlay hidden" aria-modal="true" role="dialog">
-    <div class="pacer-modal-card">
-      <div class="pacer-modal-header">
-        <div>
-          <span class="card-tag">AUTONOMIC VAGAL REGULATION</span>
-          <h3 id="pacer-protocol-title" style="font-family: var(--font-display); font-size: 18px; color: #FFFFFF; margin-top: 2px;">Cyclic Physiological Sigh</h3>
+  <!-- Fitbit / Google Health Connection Modal -->
+  <div id="modal-fitbit-connect" class="modal-backdrop hidden" aria-modal="true" role="dialog">
+    <div class="modal-dialog" style="max-width: 520px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 18px;">🟢</span>
+          <h3>Connect Google Health / Fitbit</h3>
         </div>
-        <button type="button" class="modal-close-btn" id="btn-close-pacer" aria-label="Close Pacer">✕</button>
+        <button type="button" class="btn-icon" id="btn-close-fitbit-modal" aria-label="Close modal">&times;</button>
       </div>
 
-      <div class="pacer-animation-container">
-        <div class="pacer-outer-glow" id="pacer-glow"></div>
-        <div class="pacer-circle" id="pacer-circle">
-          <span class="pacer-phase-text" id="pacer-phase">Get Ready</span>
-          <span class="pacer-timer-number" id="pacer-timer">3</span>
+      <div class="modal-body" style="gap: 16px;">
+        <div style="background: rgba(48, 110, 232, 0.1); border: 1px solid rgba(48, 110, 232, 0.25); border-radius: 12px; padding: 14px 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: #60A5FA; font-weight: 700;">Active Device</span>
+            <span class="status-pill status-demo" style="font-size: 10px; padding: 2px 8px;">Simulated Biometrics Active</span>
+          </div>
+          <strong style="color: #FFFFFF; font-size: 14px;">Google Pixel Watch / Fitbit Sense 2</strong>
+          <p style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px; line-height: 1.45;">
+            30 days of high-fidelity biometrics (Slow Wave Deep, REM, Light, Awake stages, HRV rMSSD, and Active Zone Minutes) are currently active in your dashboard.
+          </p>
         </div>
-      </div>
 
-      <div class="pacer-instructions-box">
-        <p id="pacer-instructions" style="font-size: 13px; color: var(--text-secondary); text-align: center; line-height: 1.5;">
-          Inhale deeply through your nose, take a second quick sip of air, then slowly sigh all the air out through your mouth.
-        </p>
-        <div class="pacer-cycle-tracker">
-          Cycle: <strong id="pacer-current-cycle">1</strong> / <span id="pacer-total-cycles">25</span>
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <h4 style="font-family: var(--font-display); font-size: 13.5px; color: #FFFFFF; margin-bottom: 6px;">Option 1: Continue in Simulated Mode</h4>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.45;">
+            You can immediately test all dashboard features, sleep architecture breakdowns, stress scores, and hypertrophy analytics using realistic Pixel Watch biometrics.
+          </p>
+          <button type="button" class="btn btn-outline" id="btn-fitbit-use-demo" style="width: 100%; justify-content: center;">
+            <span>Keep Using 30-Day Simulated Fitbit Data</span>
+          </button>
         </div>
-      </div>
 
-      <div class="pacer-controls-row">
-        <button type="button" class="btn btn-outline" id="btn-pacer-toggle">Pause</button>
-        <button type="button" class="btn btn-primary" id="btn-pacer-finish">End Session</button>
+        <div style="border-top: 1px solid var(--border-subtle); padding-top: 14px;">
+          <h4 style="font-family: var(--font-display); font-size: 13.5px; color: #FFFFFF; margin-bottom: 6px;">Option 2: Connect Live Fitbit Account via OAuth</h4>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.45;">
+            To pull live biometrics directly from your physical Fitbit or Pixel Watch, configure your developer credentials in <code style="color: #60A5FA; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px;">.env</code>:
+          </p>
+          <div style="background: #0D0F14; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px 12px; font-family: var(--font-mono); font-size: 11px; color: #94A3B8; margin-bottom: 12px; line-height: 1.5;">
+            GOOGLE_CLIENT_ID=your_client_id<br>
+            GOOGLE_CLIENT_SECRET=your_client_secret<br>
+            GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+          </div>
+          <button type="button" class="btn btn-primary" id="btn-fitbit-oauth-login" style="width: 100%; justify-content: center;">
+            <span>Authorize Live Fitbit Account ➔</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
