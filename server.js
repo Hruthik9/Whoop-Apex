@@ -376,23 +376,106 @@ app.get('/api/ai/coach/insights', (req, res) => {
 
 app.post('/api/ai/coach/chat', async (req, res) => {
   try {
-    const { prompt, date } = req.body;
+    const { prompt, date, sync = true } = req.body;
     if (!prompt) return res.status(400).json({ error: 'Prompt is required' });
 
+    const activeProvider = db.getActiveProvider();
+    let syncResult = { attempted: false, success: false, message: 'Sync not requested' };
+
+    // 1. Auto-sync latest wearable biometrics if requested
+    if (sync) {
+      const tokens = db.getTokens(activeProvider);
+      if (tokens && tokens.access_token) {
+        syncResult.attempted = true;
+        try {
+          const syncPromise = activeProvider === 'google_fitbit'
+            ? googleHealthService.syncAllData()
+            : whoopService.syncAllData();
+
+          // Safety timeout of 6 seconds to prevent slow wearable APIs from hanging chat
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Sync timeout')), 6000)
+          );
+
+          const resSync = await Promise.race([syncPromise, timeoutPromise]);
+          syncResult.success = resSync?.success !== false;
+          syncResult.message = resSync?.message || 'Biometrics synced successfully';
+          syncResult.newRecords = resSync?.synced || 0;
+        } catch (syncErr) {
+          console.warn('AI Coach pre-query sync warning:', syncErr.message);
+          syncResult.message = syncErr.message;
+        }
+      } else {
+        syncResult.message = 'Using local telemetry store (live wearable not connected)';
+      }
+    }
+
+    // 2. Load latest biometrics & baselines after sync
     const biometrics = db.getBiometrics();
     const dates = Object.keys(biometrics).sort();
     const history = dates.map(d => ({ date: d, ...biometrics[d] }));
 
-    let targetRecord = null;
-    if (date && biometrics[date]) {
-      targetRecord = { date, ...biometrics[date] };
-    } else if (dates.length > 0) {
-      const latestDate = dates[dates.length - 1];
-      targetRecord = { date: latestDate, ...biometrics[latestDate] };
+    let targetDate = date;
+    if (!targetDate || !biometrics[targetDate]) {
+      targetDate = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().split('T')[0];
+    }
+    const targetRecord = biometrics[targetDate] ? { date: targetDate, ...biometrics[targetDate] } : null;
+
+    // Yesterday's record for cumulative fatigue analysis
+    const targetIndex = dates.indexOf(targetDate);
+    const yesterdayRecord = targetIndex > 0 ? { date: dates[targetIndex - 1], ...biometrics[dates[targetIndex - 1]] } : null;
+
+    // User profile
+    const user = db.getUser() || {};
+
+    // Habits & correlations
+    const habitLogs = db.getHabitLogs(targetDate);
+    const habitList = db.getHabits();
+    let correlations = null;
+    try {
+      correlations = analyticsService.calculateCorrelations();
+    } catch (e) {
+      console.warn('Correlation calculation warning:', e.message);
     }
 
-    const response = await aiCoachService.chatWithCoach(prompt, targetRecord || {}, history);
-    res.json({ success: true, ...response });
+    // Hypertrophy & Nutrition profile
+    let hypertrophy = null;
+    try {
+      hypertrophy = hypertrophyService.getHypertrophyProfile(targetDate, 'gain');
+    } catch (e) {
+      console.warn('Hypertrophy profile warning:', e.message);
+    }
+
+    const context = {
+      currentVitals: targetRecord || {},
+      yesterdayVitals: yesterdayRecord || {},
+      history,
+      user,
+      habits: {
+        loggedToday: habitLogs,
+        catalog: habitList,
+        correlations
+      },
+      hypertrophy,
+      provider: activeProvider,
+      date: targetDate,
+      syncResult
+    };
+
+    const response = await aiCoachService.chatWithCoach(prompt, context, history);
+
+    res.json({
+      success: true,
+      ...response,
+      syncDetails: {
+        synced: syncResult.attempted && syncResult.success,
+        attempted: syncResult.attempted,
+        message: syncResult.message,
+        provider: activeProvider,
+        totalDays: dates.length,
+        latestDate: dates[dates.length - 1] || targetDate
+      }
+    });
   } catch (err) {
     console.error('Error in AI coach chat:', err);
     res.status(500).json({ error: err.message });

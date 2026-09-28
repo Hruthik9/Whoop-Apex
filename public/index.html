@@ -398,21 +398,23 @@
           <div class="ai-interaction-bar">
             <div class="ai-prompt-pills">
               <span class="prompt-pill-label">Quick Questions:</span>
-              <button type="button" class="ai-prompt-pill" data-prompt="Analyze my autonomic stress and HRV recovery for today">⚡ Analyze My Stress</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="How hard can I train today given my current recovery and strain?">🏋️ Can I Work Out Today?</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="Why is my recovery score where it is today? What are the primary culprits?">🩺 Why Is My Recovery Low?</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="How was my sleep architecture last night? Break down my deep and REM sleep stages.">🌙 Sleep Stages Breakdown</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="What are my daily protein and calorie targets for hypertrophy?">🥩 Protein & Hypertrophy Targets</button>
+              <button type="button" class="ai-prompt-pill" data-prompt="Analyze my autonomic stress and HRV recovery for today">⚡ Analyze Autonomic Stress</button>
               <button type="button" class="ai-prompt-pill" data-prompt="What breathwork technique should I do right now to optimize recovery?">🫁 Prescribe Breathwork</button>
-              <button type="button" class="ai-prompt-pill" data-prompt="What should I do tonight to optimize my Deep Sleep and REM architecture?">🌙 Sleep Work Tonight</button>
-              <button type="button" class="ai-prompt-pill" data-prompt="How hard can I train today given my current recovery and strain?">🏋️ Today's Training Intensity</button>
             </div>
             <form id="form-ai-coach-chat" class="ai-chat-input-wrapper">
-              <input type="text" id="ai-coach-input" class="ai-chat-input" placeholder="Ask your AI Physiological Copilot anything about your vitals, stress, sleep, or recovery..." autocomplete="off">
+              <input type="text" id="ai-coach-input" class="ai-chat-input" placeholder="Ask WHOOP Coach anything: 'Can I lift heavy today?', 'Why is recovery low?', 'How much protein?'..." autocomplete="off">
               <button type="submit" id="btn-ai-coach-send" class="btn-ai-send">
-                <span>Ask AI</span>
+                <span>Ask Coach</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
               </button>
             </form>
             <div id="ai-chat-response-box" class="ai-chat-response-box hidden">
               <div class="ai-response-header">
-                <span class="response-tag">⚡ COPILOT PHYSIOLOGICAL ASSESSMENT</span>
+                <span class="response-tag">⚡ WHOOP COACH LIVE PHYSIOLOGICAL SYNTHESIS</span>
                 <button type="button" id="btn-close-ai-response" class="btn-close-response">✕</button>
               </div>
               <div id="ai-response-content" class="ai-response-content"></div>
@@ -1149,7 +1151,14 @@
             <input type="number" id="input-log-fats" placeholder="e.g. 75" class="form-input">
           </div>
           <div class="form-group" style="align-self: flex-end;">
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Save Daily Intake</button>
+            <button type="submit" class="btn btn-primary btn-save-nutrition" id="btn-save-nutrition">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+              </svg>
+              Save Daily Intake
+            </button>
           </div>
         </form>
       </div>

@@ -2192,47 +2192,90 @@ async function handleAICoachQuery(prompt) {
   if (!box || !content) return;
 
   box.classList.remove('hidden');
+  const providerName = state.activeProvider === 'google_fitbit' ? 'Google Fitbit' : 'WHOOP';
+
+  // Stage 1: Syncing live telemetry from wearable
   content.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: 13px; padding: 14px 0;">
-      <span class="status-dot dot-green" style="animation: pulse 1s infinite alternate; width: 10px; height: 10px;"></span>
-      <span>Consulting Apex AI Physiological Engine & synthesizing biometrics...</span>
+    <div style="padding: 12px 0;">
+      <div style="display: flex; align-items: center; gap: 10px; color: #60A5FA; font-size: 13.5px; font-weight: 500; margin-bottom: 6px;">
+        <span class="status-dot dot-blue" style="animation: pulse 0.8s infinite alternate; width: 10px; height: 10px;"></span>
+        <span>🔄 Step 1/2: Syncing latest telemetry from ${providerName}...</span>
+      </div>
+      <div style="font-size: 12px; color: var(--text-muted); padding-left: 20px;">
+        Querying wearable API for updated sleep stages, nocturnal HRV, and daily strain...
+      </div>
     </div>
   `;
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Stage 2 transition timer
+  const stageTimer = setTimeout(() => {
+    content.innerHTML = `
+      <div style="padding: 12px 0;">
+        <div style="display: flex; align-items: center; gap: 10px; color: #00F076; font-size: 13.5px; font-weight: 500; margin-bottom: 6px;">
+          <span class="status-dot dot-green" style="animation: pulse 0.8s infinite alternate; width: 10px; height: 10px;"></span>
+          <span>🧠 Step 2/2: WHOOP Coach: Synthesizing recovery, sleep architecture & strain baselines...</span>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); padding-left: 20px;">
+          Evaluating 7-day baselines, restorative sleep ratio, and personalized physiological targets...
+        </div>
+      </div>
+    `;
+  }, 650);
 
   try {
     const res = await fetch('/api/ai/coach/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, date: state.selectedDate })
+      body: JSON.stringify({ prompt, date: state.selectedDate, sync: true })
     });
+    clearTimeout(stageTimer);
     const data = await res.json();
+
     if (!data.success) {
       content.innerHTML = `<p style="color: #FF3B30;">Error: ${data.error || 'Failed to generate physiological assessment'}</p>`;
       return;
+    }
+
+    // If new records were synced or telemetry updated, refresh dashboard in background
+    if (data.syncDetails?.synced && data.syncDetails?.newRecords > 0) {
+      try {
+        loadData(false);
+      } catch (e) {
+        console.warn('Silent dashboard reload error:', e);
+      }
     }
 
     let formatted = data.reply
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #FFFFFF;">$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/^### (.*$)/gim, '<h4 style="color: #FFFFFF; font-size: 14px; margin: 12px 0 6px 0; font-family: var(--font-display);">$1</h4>')
-      .replace(/^## (.*$)/gim, '<h3 style="color: #FFFFFF; font-size: 15px; margin: 14px 0 8px 0; font-family: var(--font-display);">$1</h3>')
-      .replace(/^\s*[-•]\s+(.*$)/gim, '<li style="margin-bottom: 4px; color: #CBD5E1;">$1</li>')
-      .replace(/\n\n+/g, '</p><p style="margin-bottom: 10px; color: #94A3B8; line-height: 1.55;">')
+      .replace(/^### (.*$)/gim, '<h4 style="color: #FFFFFF; font-size: 14.5px; margin: 14px 0 8px 0; font-family: var(--font-display);">$1</h4>')
+      .replace(/^## (.*$)/gim, '<h3 style="color: #FFFFFF; font-size: 16px; margin: 16px 0 10px 0; font-family: var(--font-display);">$1</h3>')
+      .replace(/^>\s*(.*$)/gim, '<div style="background: rgba(48,110,232,0.1); border-left: 3px solid #306EE8; padding: 8px 12px; margin: 8px 0; border-radius: 4px; font-size: 12.5px; color: #94A3B8;">$1</div>')
+      .replace(/^\s*[-•]\s+(.*$)/gim, '<li style="margin-bottom: 5px; color: #CBD5E1; line-height: 1.55;">$1</li>')
+      .replace(/\n\n+/g, '</p><p style="margin-bottom: 12px; color: #94A3B8; line-height: 1.6;">')
       .replace(/\n/g, '<br>');
 
     if (formatted.includes('<li')) {
       formatted = formatted.replace(/(<li.*<\/li>)/s, '<ul style="padding-left: 20px; margin: 8px 0 12px 0;">$1</ul>');
     }
 
+    const syncBadgeText = data.syncDetails?.synced
+      ? `⚡ Synced Live Telemetry (${data.syncDetails?.latestDate || state.selectedDate})`
+      : `⚡ Verified Telemetry (${data.syncDetails?.latestDate || state.selectedDate})`;
+
     const sourceTag = data.source === 'gemini-2.5-flash'
-      ? '<span style="display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(48,110,232,0.2); color:#60A5FA; border:1px solid rgba(48,110,232,0.4); margin-bottom:8px;">⚡ Gemini 2.5 Flash Verified</span>'
-      : '<span style="display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(0,240,118,0.15); color:#00F076; border:1px solid rgba(0,240,118,0.3); margin-bottom:8px;">⚡ Apex Clinical Physiological Engine</span>';
+      ? `<span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; padding:3px 10px; border-radius:12px; background:rgba(48,110,232,0.18); color:#60A5FA; border:1px solid rgba(48,110,232,0.4); font-weight:600;">⚡ Gemini 2.5 Flash Verified • ${syncBadgeText}</span>`
+      : `<span style="display:inline-flex; align-items:center; gap:6px; font-size:11px; padding:3px 10px; border-radius:12px; background:rgba(0,240,118,0.15); color:#00F076; border:1px solid rgba(0,240,118,0.3); font-weight:600;">⚡ WHOOP Coach Verified • ${syncBadgeText}</span>`;
 
     content.innerHTML = `
-      <div style="margin-bottom: 8px;">${sourceTag}</div>
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
+        <div>${sourceTag}</div>
+        <span style="font-size: 11px; color: var(--text-muted);">Wearable: <strong>${providerName}</strong></span>
+      </div>
       <div style="font-size: 13.5px; line-height: 1.6; color: #E2E8F0;">
         <p style="margin-bottom: 8px;">${formatted}</p>
       </div>
@@ -2240,6 +2283,7 @@ async function handleAICoachQuery(prompt) {
 
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (err) {
+    clearTimeout(stageTimer);
     content.innerHTML = `<p style="color: #FF3B30;">Network error: ${err.message}</p>`;
   }
 }
