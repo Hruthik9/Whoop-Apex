@@ -344,10 +344,11 @@ PHYSIOLOGICAL TELEMETRY (${analysis.date}):
 - Prescribed Breathwork: ${analysis.breathwork.name} (${analysis.breathwork.duration_min} min)
 
 CORE COACHING INSTRUCTIONS:
-1. SHORT & SIMPLE: Strictly keep your response concise (50-90 words, never more than 110 words). Avoid dense medical jargon, walls of text, or overly long lectures.
-2. EMPATHETIC & WARM: Talk like a supportive coach who cares about how their body feels today.
-3. CLEAR & SUGGESTIVE: Provide 2-3 gentle, practical suggestions they can act on right now.
-4. ACTIVE SESSION MEMORY: Remember earlier questions and answers from this active conversation. Answer follow-up questions naturally based on previous context.`;
+1. NATURAL PARAGRAPHS: Write mainly in 2 to 3 smooth, conversational paragraphs. Avoid making responses feel like a rigid list or bullet-point outline. Use points only when listing specific items is truly needed.
+2. BALANCED LENGTH: Keep your responses moderately concise (around 120 to 180 words). Not overly brief, but never long, tedious, or hard to read.
+3. EMPATHETIC & HUMAN: Speak with genuine warmth, care, and encouragement like an attentive personal coach. Validate how their body is feeling today before offering advice.
+4. INFORMATIVE & SUGGESTIVE: Weave physiological telemetry and practical next steps naturally into your advice.
+5. ACTIVE SESSION MEMORY: Remember earlier questions and answers from this active conversation. Answer follow-up questions naturally based on previous context.`;
 
       // Build multi-turn messages array from conversationHistory
       const contents = [];
@@ -396,11 +397,11 @@ CORE COACHING INSTRUCTIONS:
     }
 
     // 2. High-Precision Clinical WHOOP Coach Engine (Offline & Default)
-    // Short, clear, empathetic, and suggestive
+    // Conversational paragraphs with gentle suggestions
     const q = (userPrompt || '').toLowerCase();
     let reply = '';
     const hasHistory = Array.isArray(conversationHistory) && conversationHistory.length > 0;
-    const historyPrefix = hasHistory ? 'Building on our conversation: ' : '';
+    const historyPrefix = hasHistory ? 'Building on our conversation, ' : '';
 
     const isTraining = /work\s*out|lift|train|strain|exercise|gym|cardio|run|push|heavy|intensity|target\s*strain|rest\s*day|can\s*i/i.test(q);
     const isRecovery = /why\s*(is|my)?\s*recovery|recovery\s*(score|down|low|red|yellow)|improve\s*recovery|boost\s*recovery|culprit/i.test(q);
@@ -412,65 +413,33 @@ CORE COACHING INSTRUCTIONS:
 
     if (isTraining) {
       if (analysis.recovery.score >= 67) {
-        reply = `${historyPrefix}Your recovery is looking great at **${analysis.recovery.score}% (${analysis.recovery.category})**! Your cardiovascular system and nervous system are primed to push.\n\n` +
-          `• **Target Strain:** **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}** (Heavy lifts or intense cardio are welcome today)\n` +
-          `• **Fueling:** Grab 25–30g protein and some light carbs after training to rebuild glycogen\n` +
-          `• **Wind-down:** Aim to start relaxing around **${times.windDown}** so tomorrow stays green.`;
+        reply = `${historyPrefix}your recovery is in great shape today at **${analysis.recovery.score}% (${analysis.recovery.category})**. Your nocturnal HRV is resilient at **${analysis.recovery.hrv} ms**, which means your autonomic nervous system is refreshed and primed to absorb meaningful training strain.\n\n` +
+          `You have a green light to take on heavier compound lifting or high-intensity conditioning today, aiming for an optimal day strain between **${analysis.training.strainTargetMin} and ${analysis.training.strainTargetMax}**. Remember to refuel with 25–30g of protein post-workout, and start easing into relaxation around **${times.windDown}** to keep your metrics strong tomorrow.`;
       } else if (analysis.recovery.score >= 34) {
-        reply = `${historyPrefix}Your recovery is in a moderate zone at **${analysis.recovery.score}% (${analysis.recovery.category})**. You have solid energy, but your nervous system is in a balanced maintenance state.\n\n` +
-          `• **Target Strain:** Keep it between **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}**\n` +
-          `• **Workout Style:** Steady Zone 2 cardio or moderate lifting without pushing to failure\n` +
-          `• **Suggestion:** Stay well hydrated today and take 5 minutes to stretch post-workout.`;
+        reply = `${historyPrefix}your recovery is sitting in a balanced maintenance zone at **${analysis.recovery.score}% (${analysis.recovery.category})**. You have solid functional energy, but your nervous system is working steadily to process earlier training load rather than peak performance.\n\n` +
+          `I recommend keeping your strain moderate today—ideally between **${analysis.training.strainTargetMin} and ${analysis.training.strainTargetMax}**. Steady-state Zone 2 aerobic work or controlled resistance training without pushing to failure will keep your fitness progressing without digging into fatigue. Stay well hydrated, and spend a few minutes stretching after your session.`;
       } else {
-        reply = `${historyPrefix}Your body is carrying some fatigue today with recovery at **${analysis.recovery.score}% (${analysis.recovery.category})** and HRV down to **${analysis.recovery.hrv} ms**. Be kind to yourself today.\n\n` +
-          `• **Recommendation:** Prioritize active recovery—a 20-minute walk or gentle mobility\n` +
-          `• **Strain Cap:** Keep total strain low (< **${analysis.training.strainTargetMax}**)\n` +
-          `• **Suggestion:** Try 5 minutes of **${analysis.breathwork.name}** and aim for lights-out by **${times.lightsOut}**.`;
+        reply = `${historyPrefix}your body is clearly signaling that it needs some care today. With your recovery down at **${analysis.recovery.score}% (${analysis.recovery.category})** and HRV lower at **${analysis.recovery.hrv} ms**, your autonomic nervous system is carrying notable fatigue, and pushing through hard strain right now will only prolong your recovery deficit.\n\n` +
+          `I strongly suggest treating today as a restorative day. If you want to move, an easy 20-minute walk or gentle mobility work is plenty, keeping total strain capped under **${analysis.training.strainTargetMax}**. Try 5 minutes of **${analysis.breathwork.name}** in the Recovery Lab to help down-regulate stress, and aim for lights-out by **${times.lightsOut}** so your body can rebuild.`;
       }
     } else if (isRecovery) {
-      reply = `${historyPrefix}Your recovery is at **${analysis.recovery.score}% (${analysis.recovery.category})**. Here is what influenced it most:\n\n` +
-        `• **HRV:** **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs your 7-day average of ${analysis.recovery.avgHrv7} ms)\n` +
-        `• **Resting HR:** **${analysis.recovery.rhr} bpm** (${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm shift)\n` +
-        (analysis.culprits.length > 0 ? `• **Key Factor:** ${analysis.culprits[0]}\n\n` : `\n`) +
-        `**Gentle Suggestions:**\n` +
-        `1. Wrap up dinner by **${times.dinnerCutoff}** to give your digestion a full rest\n` +
-        `2. Take 5 minutes for **${analysis.breathwork.name}** in the Recovery Lab\n` +
-        `3. Target bedtime at **${times.lightsOut}** to clear your +${analysis.sleep_architecture.debt_min}m sleep debt.`;
+      reply = `${historyPrefix}your recovery today is at **${analysis.recovery.score}% (${analysis.recovery.category})**, reflecting how your nervous system rested overnight. Your nocturnal HRV registered at **${analysis.recovery.hrv} ms** (${analysis.recovery.hrvDeltaPct >= 0 ? '+' : ''}${analysis.recovery.hrvDeltaPct}% vs your 7-day baseline) with a resting heart rate of **${analysis.recovery.rhr} bpm**.\n\n` +
+        `To help your autonomic nervous system rebound smoothly for tomorrow, try wrapping up dinner by **${times.dinnerCutoff}** so digestion doesn't elevate your resting heart rate through the night. Practicing 5 minutes of **${analysis.breathwork.name}** and aiming for bed by **${times.lightsOut}** will give you the restorative window needed to erase your +${analysis.sleep_architecture.debt_min}m sleep debt.`;
     } else if (isSleep) {
-      reply = `${historyPrefix}You logged **${analysis.sleep_architecture.total_asleep_hours} hours** of sleep last night (${Math.round((analysis.sleep_architecture.total_asleep_min / (analysis.sleep_architecture.need_total_min || 480)) * 100)}% of your sleep need).\n\n` +
-        `• **Deep Sleep:** **${analysis.sleep_architecture.sws_min}m (${analysis.sleep_architecture.deep_pct}%)** — ${analysis.sleep_architecture.deep_pct >= 20 ? 'Optimal physical remodeling' : 'Slightly low, keep tonight cool'}\n` +
-        `• **REM Sleep:** **${analysis.sleep_architecture.rem_min}m (${analysis.sleep_architecture.rem_pct}%)** — ${analysis.sleep_architecture.rem_pct >= 20 ? 'Great mental restoration' : 'Light consolidation'}\n\n` +
-        `**Tonight's Sleep Suggestions:**\n` +
-        `• Start dimming screens at **${times.windDown}**\n` +
-        `• Target lights-out by **${times.lightsOut}** (sleep need: ${Math.floor(analysis.sleep_architecture.need_total_min / 60)}h ${analysis.sleep_architecture.need_total_min % 60}m)`;
+      reply = `${historyPrefix}you logged **${analysis.sleep_architecture.total_asleep_hours} hours** of sleep last night, covering ${Math.round((analysis.sleep_architecture.total_asleep_min / (analysis.sleep_architecture.need_total_min || 480)) * 100)}% of your calculated sleep need. You spent **${analysis.sleep_architecture.sws_min} minutes** in deep slow-wave sleep (${analysis.sleep_architecture.deep_pct}%) and **${analysis.sleep_architecture.rem_min} minutes** in REM sleep (${analysis.sleep_architecture.rem_pct}%).\n\n` +
+        `Your restorative sleep balance looks ${analysis.sleep_architecture.deep_pct >= 20 ? 'healthy and supportive of cellular repair' : 'a bit light, so giving your body a cooler bedroom tonight will help'}. Begin dimming screens and overhead lights around **${times.windDown}**, and target lights-out by **${times.lightsOut}** to catch up on your sleep need comfortably.`;
     } else if (isNutrition) {
-      reply = `${historyPrefix}For your body weight (${weightKg} kg), here are your daily nutrition anchors:\n\n` +
-        `• **Protein Target:** **${optimalProtein}g / day** (supports muscle repair and satiety)\n` +
-        `• **Energy Target:** **${targetCalories} kcal** (supports current strain demands)\n\n` +
-        `**Practical Suggestions:**\n` +
-        `1. Include 30–35g of protein in your main meals today\n` +
-        `2. Finish heavier calories by **${times.dinnerCutoff}** so digestion doesn't spike nocturnal heart rate\n` +
-        `3. Keep water and electrolytes steady throughout the afternoon.`;
+      reply = `${historyPrefix}for your body weight of **${weightKg} kg**, your target daily nutrition anchors are **${optimalProtein}g of protein** and **${targetCalories} kcal** to support muscle remodeling and energy expenditure.\n\n` +
+        `Try distributing your protein across your main meals with roughly 30–35g per sitting to keep muscle protein synthesis active. Finishing your final calorie intake by **${times.dinnerCutoff}** will keep digestive thermogenesis from elevating your nocturnal heart rate, and keeping water intake steady will support vascular blood volume throughout the afternoon.`;
     } else if (isBreath || isVitals) {
-      reply = `${historyPrefix}Your autonomic state is currently **${analysis.stress.title}** with HRV at **${analysis.recovery.hrv} ms** and resting heart rate at **${analysis.recovery.rhr} bpm**.\n\n` +
-        `**Suggested Breathwork Protocol:**\n` +
-        `• **${analysis.breathwork.name}** (${analysis.breathwork.duration_min} minutes, ${analysis.breathwork.cycles} cycles)\n` +
-        `• ${analysis.breathwork.instructions}\n\n` +
-        `*Tip: Launch the live vagal pacer in the Recovery Lab to follow along with the rhythm.*`;
+      reply = `${historyPrefix}your autonomic nervous system is currently reflecting **${analysis.stress.title}** (${analysis.stress.state}), with resting heart rate sitting at **${analysis.recovery.rhr} bpm** and HRV at **${analysis.recovery.hrv} ms**.\n\n` +
+        `To help shift your system toward restorative parasympathetic tone, I recommend 5 minutes of **${analysis.breathwork.name}** (${analysis.breathwork.instructions}). You can launch the live neuro-respiratory pacer directly in Tab 2 (Recovery Lab) to follow the guided visual cadence whenever you need to reset.`;
     } else if (isHabits) {
-      reply = `${historyPrefix}Here are 3 small habits that have the biggest positive impact on your recovery:\n\n` +
-        `1. **Morning Sunlight (10-15m):** Anchors your circadian clock and deepens slow-wave sleep tonight\n` +
-        `2. **Early Dinner (by ${times.dinnerCutoff}):** Lowers nocturnal resting heart rate and boosts next-day HRV\n` +
-        `3. **Consistent Bedtime (±20m):** Keeps your internal rhythm in sync for smoother wake-ups.`;
+      reply = `${historyPrefix}looking at your physiological baselines, a few consistent daily habits have the strongest positive correlation with your recovery scores.\n\n` +
+        `Getting 10 to 15 minutes of outdoor sunlight shortly after waking anchors your circadian rhythm and deepens slow-wave sleep tonight. Pair that with completing dinner by **${times.dinnerCutoff}** and keeping your bedtime within a consistent 20-minute window to eliminate social jetlag and support steady HRV.`;
     } else {
-      reply = `${historyPrefix}Here is your quick daily briefing for today:\n\n` +
-        `• **Recovery:** **${analysis.recovery.score}% (${analysis.recovery.category})** | HRV: **${analysis.recovery.hrv} ms**\n` +
-        `• **Strain Target:** **${analysis.training.strainTargetMin} – ${analysis.training.strainTargetMax}** (Current: ${analysis.training.dayStrain})\n` +
-        `• **Sleep:** **${analysis.sleep_architecture.total_asleep_hours}h** (+${analysis.sleep_architecture.debt_min}m debt)\n\n` +
-        `**Suggestions for Today:**\n` +
-        `1. Aim for **${optimalProtein}g Protein** and finish dinner by **${times.dinnerCutoff}**\n` +
-        `2. Try 5 minutes of **${analysis.breathwork.name}** to settle the nervous system\n` +
-        `3. Target lights-out by **${times.lightsOut}**.`;
+      reply = `${historyPrefix}here is your quick daily briefing for today: your recovery is at **${analysis.recovery.score}% (${analysis.recovery.category})** with HRV at **${analysis.recovery.hrv} ms**, and your target strain is between **${analysis.training.strainTargetMin} and ${analysis.training.strainTargetMax}**.\n\n` +
+        `Focus on nourishing your body with **${optimalProtein}g of protein**, wrap up your last meal by **${times.dinnerCutoff}**, and take 5 minutes for **${analysis.breathwork.name}** in the Recovery Lab before aiming for lights-out by **${times.lightsOut}**.`;
     }
 
     return {
