@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadHypertrophyData();
   await loadAICoachInsights();
   initPacerEngine('sigh');
+  initPwaController();
 });
 
 function checkQueryParams() {
@@ -77,8 +78,8 @@ function checkQueryParams() {
 }
 
 function initEventListeners() {
-  // Tab Navigation (supports both .nav-tab and .nav-tab-pill)
-  const tabs = document.querySelectorAll('.nav-tab, .nav-tab-pill');
+  // Tab Navigation (supports .nav-tab, .nav-tab-pill, and smartphone .bottom-dock-tab)
+  const tabs = document.querySelectorAll('.nav-tab, .nav-tab-pill, .bottom-dock-tab');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const targetTab = tab.getAttribute('data-tab');
@@ -449,13 +450,15 @@ function initEventListeners() {
 function switchTab(tabId) {
   state.currentTab = tabId;
 
-  document.querySelectorAll('.nav-tab, .nav-tab-pill').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.nav-tab, .nav-tab-pill, .bottom-dock-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
 
   const activeTabBtn = document.getElementById(`tab-btn-${tabId}`);
+  const activeDockBtn = document.getElementById(`dock-btn-${tabId}`);
   const activePane = document.getElementById(`pane-${tabId}`);
 
   if (activeTabBtn) activeTabBtn.classList.add('active');
+  if (activeDockBtn) activeDockBtn.classList.add('active');
   if (activePane) activePane.classList.add('active');
 
   // Trigger chart resize / update for newly visible tab
@@ -2628,3 +2631,80 @@ function tickPacer() {
     applyPacerPhaseUI(nextPhase);
   }
 }
+
+// -------------------------------------------------------------
+// PWA & Smartphone App Installation Controller
+// -------------------------------------------------------------
+
+let deferredPwaPrompt = null;
+
+function initPwaController() {
+  // 1. Register Service Worker for offline support & fast app load
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        console.log('WHOOP-Apex PWA Service Worker registered:', reg.scope);
+      }).catch((err) => {
+        console.warn('PWA Service Worker registration warning:', err);
+      });
+    });
+  }
+
+  // 2. Check if already running as standalone installed app
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if (isStandalone) {
+    console.log('WHOOP-Apex is running in standalone PWA app mode');
+    return;
+  }
+
+  // 3. Listen for Android/Chrome install prompt
+  const banner = document.getElementById('pwa-install-banner');
+  const btnInstall = document.getElementById('btn-pwa-install');
+  const btnDismiss = document.getElementById('btn-pwa-dismiss');
+  const instruction = document.getElementById('pwa-banner-instruction');
+
+  const isDismissed = sessionStorage.getItem('pwa_banner_dismissed') === 'true';
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    if (banner && !isDismissed) {
+      banner.classList.remove('hidden');
+    }
+  });
+
+  if (btnInstall) {
+    btnInstall.addEventListener('click', async () => {
+      if (deferredPwaPrompt) {
+        deferredPwaPrompt.prompt();
+        const { outcome } = await deferredPwaPrompt.userChoice;
+        console.log('PWA installation prompt outcome:', outcome);
+        deferredPwaPrompt = null;
+        if (banner) banner.classList.add('hidden');
+      } else {
+        alert('📲 To install WHOOP-Apex on your smartphone:\n1. Tap the Share button in Safari/Chrome\n2. Select "Add to Home Screen"');
+      }
+    });
+  }
+
+  if (btnDismiss && banner) {
+    btnDismiss.addEventListener('click', () => {
+      banner.classList.add('hidden');
+      sessionStorage.setItem('pwa_banner_dismissed', 'true');
+    });
+  }
+
+  // 4. iOS Safari detection
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIos && !isStandalone && banner && !isDismissed) {
+    if (instruction) {
+      instruction.textContent = 'Tap Share [⎋] then "Add to Home Screen"';
+    }
+    if (window.innerWidth <= 768) {
+      setTimeout(() => {
+        banner.classList.remove('hidden');
+      }, 2000);
+    }
+  }
+}
+

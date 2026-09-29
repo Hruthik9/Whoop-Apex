@@ -3690,26 +3690,424 @@ body {
   align-items: center;
 }
 
-/* Responsive adjustments */
+/* ==========================================================================
+   Mobile Bottom Navigation Dock & PWA Web App Ergonomics
+   ========================================================================== */
+
+/* Mobile Bottom Dock (Smartphones & Tablets <= 768px) */
+.mobile-bottom-dock {
+  display: none;
+}
+
+/* PWA Mobile Install Banner */
+.pwa-install-banner {
+  background: linear-gradient(135deg, rgba(20, 24, 33, 0.96), rgba(15, 23, 42, 0.96));
+  border: 1px solid rgba(0, 240, 118, 0.35);
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 8px 30px rgba(0, 240, 118, 0.12);
+  margin-bottom: 8px;
+  animation: fadeIn 0.3s ease;
+}
+
+.pwa-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.pwa-app-icon-mini img {
+  border-radius: 9px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  display: block;
+  flex-shrink: 0;
+}
+
+.pwa-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pwa-banner-text strong {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  color: #FFFFFF;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-banner-text span {
+  font-size: 11.5px;
+  color: #94A3B8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.btn-pwa-action {
+  background: var(--whoop-green);
+  color: #000000;
+  border: none;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.btn-pwa-action:active {
+  transform: scale(0.94);
+}
+
+.btn-pwa-close {
+  background: transparent;
+  border: none;
+  color: #64748B;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Comprehensive Smartphone & Tablet Responsive Overhaul (<= 768px)
+   ========================================================================== */
+
 @media (max-width: 768px) {
-  .header-container {
-    flex-direction: column;
-    align-items: flex-start;
+  /* Body & App Shell */
+  body {
+    padding: 8px 8px calc(76px + env(safe-area-inset-bottom, 20px)) 8px !important;
+    -webkit-tap-highlight-color: transparent;
   }
-  .header-controls {
+
+  .dashboard-shell {
+    padding: 14px 12px 24px 12px !important;
+    border-radius: 20px !important;
+    gap: 16px !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6) !important;
+  }
+
+  /* Fixed Mobile Bottom Dock */
+  .mobile-bottom-dock {
+    display: flex !important;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(64px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px;
+    background: rgba(11, 12, 14, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 9999;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+  }
+
+  .bottom-dock-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    background: transparent;
+    border: none;
+    color: #8E9BAE;
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    padding: 5px 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+    min-width: 0;
+  }
+
+  .bottom-dock-tab svg {
+    transition: transform 0.2s ease, stroke 0.2s ease;
+    stroke: #8E9BAE;
+  }
+
+  .bottom-dock-tab.active {
+    color: #FFFFFF;
+  }
+
+  .bottom-dock-tab.active svg {
+    stroke: var(--whoop-green);
+    transform: translateY(-2px) scale(1.1);
+  }
+
+  .bottom-dock-tab:active {
+    transform: scale(0.92);
+  }
+
+  /* Hide Desktop Top Navigation on Smartphone in favor of Bottom Dock */
+  .segmented-pill-nav {
+    display: none !important;
+  }
+
+  /* Shell Header on Mobile */
+  .shell-header {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .shell-brand {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+
+  .brand-text-logo {
+    font-size: 20px !important;
+  }
+
+  .shell-actions {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .wearable-switcher-pill {
+    order: 1;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .date-picker-wrapper {
+    order: 2;
+    flex: 1 1 auto;
+  }
+
+  .date-input {
+    width: 100% !important;
+    font-size: 13px !important;
+    padding: 6px 10px !important;
+  }
+
+  .status-pill {
+    order: 3;
+    padding: 5px 10px !important;
+    font-size: 11px !important;
+  }
+
+  #btn-sync {
+    order: 4;
+  }
+
+  #btn-connect {
+    order: 5;
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  #btn-demo, .user-avatar-circle {
+    display: none !important;
+  }
+
+  /* Hero Welcome Row */
+  .hero-welcome-row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 14px !important;
+  }
+
+  .welcome-title {
+    font-size: 22px !important;
+  }
+
+  /* Horizontal swipeable status capsules */
+  .status-capsules-bar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
     width: 100%;
-    justify-content: space-between;
+    padding-bottom: 4px;
+    gap: 8px !important;
   }
+
+  .status-capsules-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .capsule-item {
+    flex-shrink: 0 !important;
+    font-size: 11.5px !important;
+    padding: 6px 12px !important;
+  }
+
+  /* Top Trend Stats */
+  .top-trend-stats {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    margin-top: 4px;
+  }
+
+  .trend-stat-val {
+    font-size: 22px !important;
+  }
+
+  .trend-stat-sub {
+    font-size: 10.5px !important;
+  }
+
+  /* Grids & Overview Cards */
+  .reference-grid-row-1, .reference-grid-row-2 {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
   .metrics-hero-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
   }
+
+  .metric-card {
+    padding: 20px 16px !important;
+  }
+
   .charts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
   }
-  .coach-card {
-    flex-direction: column;
+
+  .chart-card {
+    padding: 16px 14px !important;
+    overflow-x: hidden !important;
   }
-  .hypertrophy-hero-card {
-    grid-template-columns: 1fr 1fr;
+
+  /* AI Chat Card on Mobile */
+  .ai-prompt-pills {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 6px;
+  }
+
+  .ai-prompt-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ai-prompt-pill {
+    flex-shrink: 0 !important;
+    font-size: 12px !important;
+    padding: 7px 12px !important;
+  }
+
+  .ai-chat-input-wrapper {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+
+  .ai-chat-input {
+    width: 100% !important;
+    font-size: 16px !important; /* 16px prevents iOS Safari auto-zoom */
+    padding: 12px 14px !important;
+  }
+
+  .btn-ai-send {
+    width: 100% !important;
+    justify-content: center !important;
+    padding: 12px 16px !important;
+    font-size: 13.5px !important;
+  }
+
+  /* Vagal Neuro-Respiratory Pacer */
+  .pacer-visual-container {
+    width: 220px !important;
+    height: 220px !important;
+    margin: 0 auto !important;
+  }
+
+  .pacer-circle {
+    width: 180px !important;
+    height: 180px !important;
+  }
+
+  .pacer-cadence-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  /* Stat Chips & Grids */
+  .stat-chips-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .projections-milestones-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  .bubble-viz-container {
+    gap: 12px !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+
+  .hyp-log-form-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .modal-dialog {
+    width: 94vw !important;
+    max-width: 94vw !important;
+    padding: 20px 16px !important;
+  }
+
+  .app-footer {
+    padding: 24px 16px 12px 16px !important;
+    font-size: 11.5px !important;
   }
 }
+
+/* Extra small smartphones (<= 380px) */
+@media (max-width: 380px) {
+  .trend-stat-val {
+    font-size: 19px !important;
+  }
+  .bottom-dock-tab span {
+    font-size: 9px !important;
+  }
+  .capsule-item {
+    font-size: 11px !important;
+    padding: 5px 10px !important;
+  }
+}
+
