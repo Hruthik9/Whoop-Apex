@@ -434,6 +434,18 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.capsule-steps {
+  background: rgba(0, 240, 118, 0.12);
+  border: 1px solid rgba(0, 240, 118, 0.35);
+  color: #00F076;
+  box-shadow: 0 2px 10px rgba(0, 240, 118, 0.15);
+  animation: fadeIn 0.3s ease;
+}
+
+.capsule-steps strong {
+  color: #FFFFFF;
+}
+
 /* Top-Right Micro-Trend Stats */
 .top-trend-stats {
   display: flex;
@@ -558,6 +570,7 @@ body {
 .dot-green { background: var(--whoop-green); box-shadow: 0 0 6px var(--whoop-green); }
 .dot-rose { background: var(--whoop-rose); box-shadow: 0 0 6px var(--whoop-rose); }
 .dot-yellow { background: var(--whoop-yellow); box-shadow: 0 0 6px var(--whoop-yellow); }
+.dot-fitbit-green { background: #00F076; box-shadow: 0 0 6px #00F076; }
 
 .summary-count {
   font-family: var(--font-display);
@@ -1023,6 +1036,9 @@ body {
   font-size: 14px;
   margin-bottom: 24px;
 }
+.hidden {
+  display: none !important;
+}
 .alert-banner.hidden {
   display: none;
 }
@@ -1337,6 +1353,39 @@ body {
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.stat-chip-steps {
+  border-color: rgba(0, 240, 118, 0.28);
+  background: linear-gradient(180deg, rgba(0, 240, 118, 0.05), rgba(17, 24, 39, 0.6));
+  animation: fadeIn 0.3s ease;
+}
+
+.stat-chip-steps:hover {
+  border-color: rgba(0, 240, 118, 0.5);
+  box-shadow: 0 4px 20px rgba(0, 240, 118, 0.15);
+}
+
+.step-chip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.step-progress-track {
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.step-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #00F076, #38BDF8);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .stat-chip-val {

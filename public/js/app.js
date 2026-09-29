@@ -893,6 +893,12 @@ function updateOverviewGauges(dayRecord) {
     const featFocus = document.getElementById('feat-focus-label');
     if (featFocus) featFocus.textContent = 'Rest & Recovery';
 
+    // Reset steps
+    const capSteps = document.getElementById('cap-steps');
+    if (capSteps) capSteps.classList.add('hidden');
+    const sumStepsRow = document.getElementById('sum-steps-row');
+    if (sumStepsRow) sumStepsRow.classList.add('hidden');
+
     return;
   }
 
@@ -972,6 +978,28 @@ function updateOverviewGauges(dayRecord) {
   if (capStrain) capStrain.textContent = `${strainScore}`;
   const capHrv = document.getElementById('cap-hrv-val');
   if (capHrv) capHrv.textContent = `${recovery.hrv_ms || '--'}ms`;
+
+  // Status Capsules: Steps (Visible ONLY in Google Fitbit mode; clearly hidden in WHOOP mode)
+  const isGoogle = state.activeProvider === 'google_fitbit';
+  const capSteps = document.getElementById('cap-steps');
+  const capStepsVal = document.getElementById('cap-steps-val');
+  const sumStepsRow = document.getElementById('sum-steps-row');
+  const sumStepsVal = document.getElementById('sum-steps-val');
+
+  if (isGoogle && dayRecord.strain && dayRecord.strain.steps !== undefined && dayRecord.strain.steps !== null) {
+    const formattedSteps = Number(dayRecord.strain.steps).toLocaleString();
+    if (capSteps) {
+      capSteps.classList.remove('hidden');
+      if (capStepsVal) capStepsVal.textContent = formattedSteps;
+    }
+    if (sumStepsRow) {
+      sumStepsRow.classList.remove('hidden');
+      if (sumStepsVal) sumStepsVal.textContent = formattedSteps;
+    }
+  } else {
+    if (capSteps) capSteps.classList.add('hidden');
+    if (sumStepsRow) sumStepsRow.classList.add('hidden');
+  }
 
   // 2. Top-Right Micro-Trend Stats
   const topHrv = document.getElementById('top-stat-hrv');
@@ -1307,6 +1335,37 @@ function updateStrainWorkoutsView(dayRecord) {
 
   const workouts = dayRecord?.workouts || [];
   document.getElementById('total-workouts-val').textContent = workouts.length;
+
+  // Steps Chip Handling: Only visible in Google Fitbit mode; clearly hidden in WHOOP mode
+  const isGoogle = state.activeProvider === 'google_fitbit';
+  const stepsChip = document.getElementById('fitbit-steps-chip');
+
+  if (isGoogle && dayRecord && dayRecord.strain && dayRecord.strain.steps !== undefined && dayRecord.strain.steps !== null) {
+    if (stepsChip) {
+      stepsChip.classList.remove('hidden');
+      const steps = Number(dayRecord.strain.steps) || 0;
+      const stepsValEl = document.getElementById('fitbit-steps-val');
+      if (stepsValEl) stepsValEl.textContent = steps.toLocaleString();
+
+      const pct = Math.round((steps / 10000) * 100);
+      const badge = document.getElementById('fitbit-step-goal-badge');
+      if (badge) {
+        badge.textContent = `${pct}% GOAL`;
+        badge.className = `badge ${pct >= 100 ? 'badge-green' : pct >= 60 ? 'badge-blue' : 'badge-yellow'}`;
+      }
+
+      const fill = document.getElementById('fitbit-step-progress-fill');
+      if (fill) fill.style.width = `${Math.min(100, pct)}%`;
+
+      const sub = document.getElementById('fitbit-steps-sub');
+      if (sub) {
+        const azm = dayRecord.strain.active_zone_minutes || 0;
+        sub.textContent = `Goal: 10,000 • ${azm} Active Zone Min`;
+      }
+    }
+  } else {
+    if (stepsChip) stepsChip.classList.add('hidden');
+  }
 
   const container = document.getElementById('workouts-list-container');
   if (workouts.length === 0) {

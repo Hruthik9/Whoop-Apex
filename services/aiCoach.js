@@ -72,6 +72,8 @@ class AICoachService {
     const strainTargetMin = recScore >= 67 ? 14.0 : (recScore >= 34 ? 10.0 : 4.0);
     const strainTargetMax = recScore >= 67 ? 17.5 : (recScore >= 34 ? 13.5 : 8.0);
     const dayStrain = strain.score || 0;
+    const steps = strain.steps || null;
+    const activeZoneMinutes = strain.active_zone_minutes || null;
 
     // 1. Stress Index & Autonomic Nervous System (ANS) State
     let stressScore = 3; // 1-10
@@ -220,6 +222,8 @@ class AICoachService {
         dayStrain,
         strainTargetMin,
         strainTargetMax,
+        steps,
+        activeZoneMinutes,
         intensity: recScore >= 67 ? 'High Output (Progressive Overload / Threshold)' : (recScore >= 34 ? 'Moderate Aerobic Base / Maintenance' : 'Active Recovery & Vagal Restoration')
       },
       sleep_architecture: {
@@ -334,7 +338,7 @@ PHYSIOLOGICAL TELEMETRY (${analysis.date}):
 - HRV: ${analysis.recovery.hrv} ms (7d Baseline: ${analysis.recovery.avgHrv7} ms | Delta: ${analysis.recovery.hrvDeltaPct}%)
 - Resting HR: ${analysis.recovery.rhr} bpm (7d Baseline: ${analysis.recovery.avgRhr7} bpm | Shift: ${analysis.recovery.rhrDelta >= 0 ? '+' : ''}${analysis.recovery.rhrDelta} bpm)
 - Respiratory Rate: ${analysis.sleep_architecture.resp_rate} rpm
-- Day Strain: ${analysis.training.dayStrain} (Optimal Target: ${analysis.training.strainTargetMin} - ${analysis.training.strainTargetMax})
+- Day Strain: ${analysis.training.dayStrain} (Optimal Target: ${analysis.training.strainTargetMin} - ${analysis.training.strainTargetMax})${analysis.training.steps ? `\n- Daily Steps: ${analysis.training.steps.toLocaleString()}${analysis.training.activeZoneMinutes ? ` (${analysis.training.activeZoneMinutes} Active Zone Min)` : ''}` : ''}
 - Total Sleep: ${analysis.sleep_architecture.total_asleep_hours}h (${analysis.sleep_architecture.total_asleep_min}m)
 - Deep Sleep (Slow Wave): ${analysis.sleep_architecture.sws_min}m (${analysis.sleep_architecture.deep_pct}%)
 - REM Sleep: ${analysis.sleep_architecture.rem_min}m (${analysis.sleep_architecture.rem_pct}%)
@@ -348,7 +352,8 @@ CORE COACHING INSTRUCTIONS:
 2. BALANCED LENGTH: Keep your responses moderately concise (around 120 to 180 words). Not overly brief, but never long, tedious, or hard to read.
 3. EMPATHETIC & HUMAN: Speak with genuine warmth, care, and encouragement like an attentive personal coach. Validate how their body is feeling today before offering advice.
 4. INFORMATIVE & SUGGESTIVE: Weave physiological telemetry and practical next steps naturally into your advice.
-5. ACTIVE SESSION MEMORY: Remember earlier questions and answers from this active conversation. Answer follow-up questions naturally based on previous context.`;
+5. WEARABLE PHILOSOPHY: If the user asks about steps, note that Google Health / Fitbit tracks mechanical steps and Active Zone Minutes, whereas WHOOP prioritizes cardiovascular and muscular strain (0 to 21) to capture actual cardiac demand rather than step counts.
+6. ACTIVE SESSION MEMORY: Remember earlier questions and answers from this active conversation. Answer follow-up questions naturally based on previous context.`;
 
       // Build multi-turn messages array from conversationHistory
       const contents = [];
@@ -410,8 +415,17 @@ CORE COACHING INSTRUCTIONS:
     const isNutrition = /protein|eat|nutrition|food|calories|macros|hypertrophy|diet|muscle|bulk|cut|fuel|dinner|lunch|breakfast/i.test(q);
     const isHabits = /habit|alcohol|caffeine|sunlight|cold\s*plunge|sauna|routine|lifestyle|what\s*helps/i.test(q);
     const isBreath = /breath|breathe|pacer|sigh|4-7-8|box\s*breath|calm/i.test(q);
+    const isSteps = /step|walk(ing)?\s*count|how\s*many\s*steps|daily\s*steps/i.test(q);
 
-    if (isTraining) {
+    if (isSteps) {
+      if (provider === 'google_fitbit' && analysis.training.steps) {
+        reply = `${historyPrefix}you have recorded **${analysis.training.steps.toLocaleString()} steps** today${analysis.training.activeZoneMinutes ? ` with **${analysis.training.activeZoneMinutes} Active Zone Minutes**` : ''} via Google Health / Fitbit.\n\n` +
+          `Hitting your daily movement threshold provides essential non-exercise baseline circulation without creating central nervous system fatigue. Combined with your optimal day strain target of **${analysis.training.strainTargetMin} - ${analysis.training.strainTargetMax}**, you are in a great position to balance active metabolic conditioning with adequate recovery.`;
+      } else {
+        reply = `${historyPrefix}in WHOOP mode, mechanical step counts are intentionally not tracked or displayed on the interface. Instead, WHOOP focuses on your true cardiovascular and muscular strain (0 to 21 scale), capturing your actual heart rate response whether you are cycling, lifting weights, or sprinting.\n\n` +
+          `Your current day strain is **${analysis.training.dayStrain}**, and based on your recovery score of **${analysis.recovery.score}%**, your recommended optimal strain target for today is between **${analysis.training.strainTargetMin} and ${analysis.training.strainTargetMax}**.`;
+      }
+    } else if (isTraining) {
       if (analysis.recovery.score >= 67) {
         reply = `${historyPrefix}your recovery is in great shape today at **${analysis.recovery.score}% (${analysis.recovery.category})**. Your nocturnal HRV is resilient at **${analysis.recovery.hrv} ms**, which means your autonomic nervous system is refreshed and primed to absorb meaningful training strain.\n\n` +
           `You have a green light to take on heavier compound lifting or high-intensity conditioning today, aiming for an optimal day strain between **${analysis.training.strainTargetMin} and ${analysis.training.strainTargetMax}**. Remember to refuel with 25–30g of protein post-workout, and start easing into relaxation around **${times.windDown}** to keep your metrics strong tomorrow.`;
