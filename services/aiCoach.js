@@ -295,8 +295,8 @@ class AICoachService {
   }
 
   /**
-   * Interactive chat query using Gemini 2.5 Flash if API key is configured,
-   * or the advanced Clinical WHOOP Coach Physiological Engine.
+   * Interactive chat query using Gemini if API key is configured,
+   * or the advanced Clinical Apex Coach Physiological Engine.
    */  async chatWithCoach(userPrompt, contextOrVitals = {}, history = [], conversationHistory = []) {
     const isRichContext = !!contextOrVitals.currentVitals;
     const currentVitals = isRichContext ? contextOrVitals.currentVitals : contextOrVitals;
@@ -329,7 +329,7 @@ class AICoachService {
         'gemini-3.5-flash'
       ];
 
-      const systemInstruction = `You are WHOOP Coach AI, an elite, caring human performance coach.
+      const systemInstruction = `You are Apex Coach, an elite, caring human performance and physiological coach.
 The user is tracking their biometrics using ${provider === 'google_fitbit' ? 'Google Pixel Watch / Fitbit' : 'WHOOP (Latest 5.0 / API)'}.
 The biometrics are freshly synced from their wearable.
 
@@ -401,7 +401,7 @@ CORE COACHING INSTRUCTIONS:
       }
     }
 
-    // 2. High-Precision Clinical WHOOP Coach Engine (Offline & Default)
+    // 2. High-Precision Clinical Apex Coach Engine (Offline & Default)
     // Conversational paragraphs with gentle suggestions
     const q = (userPrompt || '').toLowerCase();
     let reply = '';

@@ -6,14 +6,14 @@
 ![Express](https://img.shields.io/badge/Express-4.19-000000?style=for-the-badge&logo=express&logoColor=white)
 ![WHOOP API](https://img.shields.io/badge/WHOOP_API-v2-00F076?style=for-the-badge&logo=target&logoColor=black)
 ![Google Health / Fitbit](https://img.shields.io/badge/Google_Fitbit-Supported-00B0B9?style=for-the-badge&logo=fitbit&logoColor=white)
-![Gemini AI](https://img.shields.io/badge/Gemini_AI-Copilot-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![Apex Coach](https://img.shields.io/badge/Apex_Coach-AI_Powered-4285F4?style=for-the-badge&logo=google&logoColor=white)
 ![PWA](https://img.shields.io/badge/PWA-Mobile_Ready-purple?style=for-the-badge&logo=pwa&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 ### **The Autonomous Physiological Intelligence & Multi-Wearable Platform**
 *Transform passive wearable telemetry into actionable athletic dominance.*
 
-**Autonomic Recovery Analytics** • **Exact Millisecond Sleep Engine** • **Gemini AI Physiological Copilot** • **Multi-Wearable Ecosystem (WHOOP & Fitbit)** • **Hypertrophy & Fat-Loss Velocity Lab** • **Mobile PWA**
+**Autonomic Recovery Analytics** • **Exact Millisecond Sleep Engine** • **Apex Coach (Autonomous Copilot)** • **Multi-Wearable Ecosystem (WHOOP & Fitbit)** • **Hypertrophy & Fat-Loss Velocity Lab** • **Mobile PWA**
 
 [Platform Evolution (v1 vs v2)](#-platform-evolution-v1-vs-v2) • [Choosing Your Mode](#-choosing-your-mode-v1-core-vs-v2-apex) • [Key Features](#-key-features) • [Local Setup](#-step-by-step-setup-guide) • [Render 24/7 Deployment](#-247-cloud-deployment-render) • [PWA Mobile Install](#-installing-as-a-mobile-pwa) • [API Reference](#-api-endpoints)
 
@@ -31,7 +31,7 @@ Most fitness apps leave you with unanswered questions:
 - *How many calories and grams of protein should I consume today based on my real-time wearable strain and body composition goals?*
 - *Can I aggregate both WHOOP and Google Pixel Watch / Fitbit biometrics in one unified cockpit?*
 
-**WHOOP-Apex AI is the missing intelligence layer for your wearable.** It transforms raw telemetry into an autonomous sports science laboratory — running empirical habit causality matrices, calculating sleep staging down to the exact millisecond, projecting hypertrophy velocity across 30 to 180-day horizons, and powering an interactive **Gemini AI physiological coach** that prescribes personalized daily protocols.
+**WHOOP-Apex AI is the missing intelligence layer for your wearable.** It transforms raw telemetry into an autonomous sports science laboratory — running empirical habit causality matrices, calculating sleep staging down to the exact millisecond, projecting hypertrophy velocity across 30 to 180-day horizons, and powering **Apex Coach**, an interactive autonomous physiological copilot (connect Gemini to power real-time AI intelligence) that prescribes personalized daily protocols.
 
 ---
 
@@ -48,7 +48,7 @@ WHOOP-Apex began as a dedicated local WHOOP dashboard and evolved into an enterp
 │ • Pure WHOOP 5.0 (API-Agnostic) Telemetry│ • Dual-Provider Architecture:    │
 │ • Exact Millisecond Sleep Staging    │   - WHOOP 5.0 (Latest) Live API      │
 │ • Empirical Habit Delta Engine       │   - Google Health / Fitbit API       │
-│ • Hypertrophy & Fat Loss Lab         │ • Gemini AI Physiological Copilot    │
+│ • Hypertrophy & Fat Loss Lab         │ • Apex Coach (Physiological AI)      │
 │ • Uth-Sørensen VO2 Max Estimation    │ • Standalone Mobile PWA + Bottom Dock│
 │ • Local JSON Database (data/store)   │ • 24/7 Render Cloud Deployment       │
 │ • Focused Desktop Cockpit            │ • Dual-Layer Silent OAuth Restore    │
@@ -63,7 +63,7 @@ WHOOP-Apex began as a dedicated local WHOOP dashboard and evolved into an enterp
 | :--- | :--- | :--- |
 | **Supported Devices** | **WHOOP 5.0 (Latest)** & 4.0 (Hardware-Agnostic API) | **WHOOP 5.0 / 4.0** + **Google Pixel Watch & Fitbit Sense 2** |
 | **Wearable Switching** | Single provider | **1-Click Live Switcher** (blends steps/active zones cleanly; masks when in WHOOP mode) |
-| **AI Intelligence** | Rule-based heuristics | **Gemini AI Physiological Copilot** (conversational analysis, active session memory, context-aware) |
+| **AI Intelligence** | Rule-based heuristics | **Apex Coach** (conversational analysis, active session memory, context-aware; connect Gemini to power) |
 | **Mobile Experience** | Desktop responsive | **Full Native PWA**: Fullscreen standalone, thumb-nav bottom dock, custom "Apex Pulse" icons |
 | **Cloud Deployment** | Local machine only | **Render 24/7 Cloud Support** (`whoop-apex-ai.onrender.com`) with `render.yaml` Blueprint |
 | **Session Persistence**| Local file storage | **Dual-Layer Auto-Restore**: Browser `localStorage` + Backend `WHOOP_REFRESH_TOKEN` seeding |
@@ -79,7 +79,7 @@ WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 M
 ### 🔹 Mode 1: v1 Sovereign WHOOP-Only Mode
 *Best for athletes who wear a WHOOP strap (latest WHOOP 5.0 or 4.0) and desire a minimal, lightning-fast, zero-bloat dashboard.*
 - **How it works**: By default, WHOOP is the primary provider. Telemetry is pulled directly from WHOOP's official Developer API (hardware-agnostic, supporting the latest WHOOP 5.0 and previous generations). All third-party metrics (Fitbit steps, active zone minutes) are cleanly hidden from the UI.
-- **Requirements**: Only WHOOP developer credentials (`WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`). No Google account or Gemini API key required.
+- **Requirements**: Only WHOOP developer credentials (`WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`). No Google account or Gemini connection required.
 - **Key benefits**:
   - Pure WHOOP 5.0 live cloud API data stream.
   - Zero-discrepancy millisecond sleep staging (100% match with WHOOP app).
@@ -88,10 +88,10 @@ WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 M
 
 ### 🔹 Mode 2: v2 WHOOP-Apex Multi-Wearable AI Platform
 *Best for athletes with multiple devices (WHOOP 5.0 + Google Pixel Watch / Fitbit) or those who want an intelligent AI sports scientist copilot.*
-- **How it works**: Unlocks the 1-click provider switcher in the top bar, integrates Google Health / Fitbit telemetry alongside WHOOP 5.0, powers up the conversational Gemini AI coach, and enables mobile PWA installation with 24/7 cloud availability.
-- **Requirements**: WHOOP credentials + `GEMINI_API_KEY` (free from Google AI Studio).
+- **How it works**: Unlocks the 1-click provider switcher in the top bar, integrates Google Health / Fitbit telemetry alongside WHOOP 5.0, powers up **Apex Coach** (connect Gemini to power real-time AI intelligence), and enables mobile PWA installation with 24/7 cloud availability.
+- **Requirements**: WHOOP credentials + `GEMINI_API_KEY` (connect Gemini to power the Apex Coach; free key from Google AI Studio).
 - **Key benefits**:
-  - Live Gemini AI Copilot for personalized recovery diagnostics and training recommendations.
+  - Live **Apex Coach** for personalized recovery diagnostics and training recommendations.
   - Seamless toggle between WHOOP 5.0 and Google Pixel Watch / Fitbit.
   - Native mobile PWA with thumb-dock navigation.
   - Permanent 24/7 deployment on Render with automatic token restoration across cold starts.
@@ -101,9 +101,9 @@ WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 M
 
 ## ⚡ Key Features
 
-### 1. 🤖 Gemini AI Physiological Copilot & Live Chat (v2)
-- **Context-Aware Coaching**: Feeds live recovery scores, HRV baselines, sleep staging, and daily active habits directly into Gemini 2.5 Flash.
-- **Dynamic Training Advice**: Asks questions like *"Can I lift heavy today?"*, *"Why did my recovery crash?"*, or *"Break down my sleep architecture"*.
+### 1. 🤖 Apex Coach: Live Physiological Copilot (v2)
+- **Autonomous Intelligence**: Connect Gemini to power the Apex Coach with live biometric awareness, feeding recovery scores, HRV baselines, sleep staging, and daily active habits directly into the conversation.
+- **Dynamic Training Advice**: Asks Apex Coach questions like *"Can I lift heavy today?"*, *"Why did my recovery crash?"*, or *"Break down my sleep architecture"*.
 - **Active Session Memory**: Multi-turn conversational memory allows natural follow-ups (*"What should my pre-bed routine look like instead?"*).
 - **Ergonomic Chat Console**: Messages stream cleanly on top while the input bar remains docked at the bottom for thumb ergonomics on smartphones and desktops.
 
@@ -209,7 +209,7 @@ WHOOP_CLIENT_ID=your_whoop_client_id_here
 WHOOP_CLIENT_SECRET=your_whoop_client_secret_here
 REDIRECT_URI=http://localhost:3000/api/auth/callback
 
-# Optional for Gemini AI Physiological Copilot (v2)
+# Connect Gemini to power the Apex Coach (v2 - Optional)
 # Free key from https://aistudio.google.com
 GEMINI_API_KEY=your_gemini_api_key_here
 
@@ -256,7 +256,7 @@ Under the **Environment** tab on Render, add:
 | `WHOOP_CLIENT_ID` | `your_whoop_client_id` | From WHOOP Developer Portal |
 | `WHOOP_CLIENT_SECRET` | `your_whoop_client_secret` | From WHOOP Developer Portal |
 | `REDIRECT_URI` | `https://whoop-apex-ai.onrender.com/api/auth/callback` | Exact URL on Render |
-| `GEMINI_API_KEY` | `your_gemini_api_key` | Optional: Enables AI Copilot |
+| `GEMINI_API_KEY` | `your_gemini_api_key` | Optional: Connect Gemini to power the Apex Coach |
 | `WHOOP_REFRESH_TOKEN` | *(optional)* | Preserves login across cold-starts |
 
 #### Step 5: Update Redirect URI in WHOOP Portal
@@ -333,7 +333,7 @@ Whoop-Apex/
 │   ├── db.js                # Atomic JSON database with env-fallback token seeding
 │   ├── whoop.js             # WHOOP v2 OAuth, atomic mutex & millisecond sync
 │   ├── googleHealth.js      # Google Health / Fitbit telemetry & simulated data
-│   ├── aiCoach.js           # Gemini 2.5 Flash physiological prompt engine
+│   ├── aiCoach.js           # Apex Coach prompt & physiological intelligence engine
 │   ├── habits.js            # Habit causality & statistical correlation engine
 │   ├── hypertrophy.js       # Hypertrophy, Aragon-McDonald velocity & VO2 Max
 │   └── demoData.js          # 30-day realistic baseline biometric generator
@@ -381,10 +381,10 @@ Whoop-Apex/
 | `GET` | `/api/hypertrophy?goal=gain\|loss` | Personalized macro targets, VO₂ Max, and progress projections |
 | `POST` | `/api/hypertrophy/log` | Logs daily nutrition (calories, protein, carbs, fats) |
 
-### Gemini AI Physiological Copilot
+### Apex Coach Endpoints
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/ai/coach/chat` | Interactive multi-turn Gemini AI physiological copilot endpoint |
+| `POST` | `/api/ai/coach/chat` | Interactive multi-turn Apex Coach endpoint (connect Gemini to power) |
 
 ---
 
@@ -399,8 +399,8 @@ Whoop-Apex/
 ### Q: Does WHOOP support steps and active zone minutes?
 **A:** No. WHOOP measures strain via continuous cardiovascular heart-rate load rather than step counting. When running in WHOOP mode (v1), steps and active zones are automatically masked. If you want step and active zone tracking, switch to the Google Health / Fitbit provider (v2) in the top header!
 
-### Q: Can I run this without a Gemini API key?
-**A:** Yes! The core dashboard, exact millisecond sleep staging, habit correlations, hypertrophy lab, and VO₂ Max protocols run completely independently of Gemini. If `GEMINI_API_KEY` is omitted, the AI coach will simply inform you to add a key.
+### Q: Can I run this without connecting Gemini?
+**A:** Yes! The core dashboard, exact millisecond sleep staging, habit correlations, hypertrophy lab, and VO₂ Max protocols run completely independently. If you haven't connected Gemini, Apex Coach will simply notify you to add a Gemini key to activate full autonomous AI capabilities.
 
 ---
 

@@ -2525,7 +2525,7 @@ async function handleAICoachQuery(prompt) {
   const stageTimer = setTimeout(() => {
     const textEl = document.getElementById('chat-loading-text');
     if (textEl) {
-      textEl.textContent = '🧠 Step 2/2: WHOOP Coach: Synthesizing recovery & biometrics...';
+      textEl.textContent = '🧠 Step 2/2: Apex Coach: Synthesizing recovery & biometrics...';
       textEl.style.color = '#38BDF8';
     }
   }, 650);
@@ -2597,7 +2597,7 @@ async function handleAICoachQuery(prompt) {
     coachRow.innerHTML = `
       <div class="chat-bubble chat-bubble-coach">
         <div class="chat-sender-header-coach">
-          <span class="coach-sender-title">⚡ WHOOP Coach</span>
+          <span class="coach-sender-title">⚡ Apex Coach</span>
           <span class="coach-model-badge">${badgeSource}</span>
         </div>
         <div style="font-size: 13px; line-height: 1.55; color: #E2E8F0;">
