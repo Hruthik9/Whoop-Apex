@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: whoop-apex
+    name: whoop-apex-ai
     runtime: node
     plan: free
     buildCommand: npm install
