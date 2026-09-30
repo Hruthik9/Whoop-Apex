@@ -10,6 +10,7 @@ let state = {
   selectedDate: getLocalDateString(),
   currentTab: 'overview',
   currentGoal: 'gain',
+  overviewRangeDays: 30,
   auth: { connected: false, user: null, has_data: false },
   activeProvider: 'whoop',
   data: { latest: null, history: [] },
@@ -445,6 +446,19 @@ function initEventListeners() {
       await loadHypertrophyData();
     });
   }
+
+  // Overview Trend Chart Time Range (1 Month, 2 Weeks, 1 Week)
+  const overviewTimePills = document.querySelectorAll('#overview-time-pills .time-pill-btn');
+  overviewTimePills.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      overviewTimePills.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const days = parseInt(btn.getAttribute('data-days'), 10) || 30;
+      state.overviewRangeDays = days;
+      renderOverviewTrendChart(days);
+    });
+  });
 }
 
 function switchTab(tabId) {
@@ -1768,6 +1782,114 @@ function renderImpactTable(correlations) {
 // Interactive Chart.js Initializers
 // -------------------------------------------------------------
 
+function renderOverviewTrendChart(rangeDays = state.overviewRangeDays || 30) {
+  const elOverview = document.getElementById('overview-trend-chart');
+  if (!elOverview) return;
+
+  const rawHistory = state.data.history || [];
+  if (rawHistory.length === 0) return;
+
+  // Filter or slice history according to selected range
+  const history = rawHistory.slice(-rangeDays);
+
+  const labels = history.map(h => {
+    const parts = h.date.split('-');
+    return `${parts[1]}/${parts[2]}`;
+  });
+
+  const recoveryData = history.map(h => h.recovery?.score ?? null);
+  const hrvData = history.map(h => h.recovery?.hrv_ms ?? null);
+
+  if (state.charts.overview) {
+    state.charts.overview.destroy();
+  }
+
+  const ctx = elOverview.getContext('2d');
+  const gradRose = ctx.createLinearGradient(0, 0, 0, 240);
+  gradRose.addColorStop(0, 'rgba(232, 67, 117, 0.18)');
+  gradRose.addColorStop(1, 'rgba(232, 67, 117, 0.00)');
+
+  const gradBlue = ctx.createLinearGradient(0, 0, 0, 240);
+  gradBlue.addColorStop(0, 'rgba(48, 110, 232, 0.16)');
+  gradBlue.addColorStop(1, 'rgba(48, 110, 232, 0.00)');
+
+  // Point radius: for shorter windows like 7 or 14 days, show subtle dots for easier reading & tapping
+  const ptRadius = rangeDays <= 14 ? 3 : 0;
+
+  state.charts.overview = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Recovery (%)',
+          data: recoveryData,
+          borderColor: '#E84375',
+          backgroundColor: gradRose,
+          fill: true,
+          borderWidth: 2.8,
+          pointRadius: ptRadius,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#E84375',
+          tension: 0.45,
+          yAxisID: 'y'
+        },
+        {
+          label: 'Strain & HRV Wave',
+          data: hrvData,
+          borderColor: '#306EE8',
+          backgroundColor: gradBlue,
+          fill: true,
+          borderWidth: 2.8,
+          pointRadius: ptRadius,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#306EE8',
+          tension: 0.45,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)' },
+          ticks: { color: '#6A7282', font: { size: 10, family: 'Inter' }, maxTicksLimit: rangeDays <= 7 ? 7 : (rangeDays <= 14 ? 7 : 8) }
+        },
+        y: {
+          position: 'left',
+          min: 0,
+          max: 100,
+          grid: { color: 'rgba(255, 255, 255, 0.03)' },
+          ticks: { color: '#E84375', font: { size: 10, family: 'Inter' }, stepSize: 25 }
+        },
+        y1: {
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#306EE8', font: { size: 10, family: 'Inter' }, maxTicksLimit: 5 }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1A1D24',
+          titleColor: '#FFFFFF',
+          bodyColor: '#94A3B8',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          borderWidth: 1,
+          padding: 10,
+          cornerRadius: 8
+        }
+      }
+    }
+  });
+}
+
 function renderAllCharts() {
   const history = state.data.history || [];
   if (history.length === 0) return;
@@ -1812,91 +1934,8 @@ function renderAllCharts() {
   };
 
   // 1. Overview Trend Chart (Spline Waveform in Resq.io Style)
-  const elOverview = document.getElementById('overview-trend-chart');
-  if (elOverview && (!state.charts.overview || state.currentTab === 'overview')) {
-    if (state.charts.overview) state.charts.overview.destroy();
-
-    const ctx = elOverview.getContext('2d');
-    const gradRose = ctx.createLinearGradient(0, 0, 0, 240);
-    gradRose.addColorStop(0, 'rgba(232, 67, 117, 0.18)');
-    gradRose.addColorStop(1, 'rgba(232, 67, 117, 0.00)');
-
-    const gradBlue = ctx.createLinearGradient(0, 0, 0, 240);
-    gradBlue.addColorStop(0, 'rgba(48, 110, 232, 0.16)');
-    gradBlue.addColorStop(1, 'rgba(48, 110, 232, 0.00)');
-
-    state.charts.overview = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: 'Recovery (%)',
-            data: recoveryData,
-            borderColor: '#E84375',
-            backgroundColor: gradRose,
-            fill: true,
-            borderWidth: 2.8,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: '#E84375',
-            tension: 0.45,
-            yAxisID: 'y'
-          },
-          {
-            label: 'Strain & HRV Wave',
-            data: hrvData,
-            borderColor: '#306EE8',
-            backgroundColor: gradBlue,
-            fill: true,
-            borderWidth: 2.8,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: '#306EE8',
-            tension: 0.45,
-            yAxisID: 'y1'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: {
-          mode: 'index',
-          intersect: false
-        },
-        scales: {
-          x: {
-            grid: { color: 'rgba(255, 255, 255, 0.03)' },
-            ticks: { color: '#6A7282', font: { size: 10, family: 'Inter' }, maxTicksLimit: 8 }
-          },
-          y: {
-            position: 'left',
-            min: 0,
-            max: 100,
-            grid: { color: 'rgba(255, 255, 255, 0.03)' },
-            ticks: { color: '#E84375', font: { size: 10, family: 'Inter' }, stepSize: 25 }
-          },
-          y1: {
-            position: 'right',
-            grid: { drawOnChartArea: false },
-            ticks: { color: '#306EE8', font: { size: 10, family: 'Inter' }, maxTicksLimit: 5 }
-          }
-        },
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            backgroundColor: '#1A1D24',
-            titleColor: '#FFFFFF',
-            bodyColor: '#94A3B8',
-            borderColor: 'rgba(255, 255, 255, 0.08)',
-            borderWidth: 1,
-            padding: 10,
-            cornerRadius: 8
-          }
-        }
-      }
-    });
+  if (!state.charts.overview || state.currentTab === 'overview') {
+    renderOverviewTrendChart(state.overviewRangeDays || 30);
   }
 
   // 2. Recovery & HRV Deep Chart
