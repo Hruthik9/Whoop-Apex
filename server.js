@@ -72,10 +72,11 @@ app.get('/api/auth/status', (req, res) => {
 
   res.json({
     active_provider: activeProvider,
-    connected: activeProvider === 'google_fitbit' ? !!(tokensGoogle && tokensGoogle.access_token) : !!(tokensWhoop && tokensWhoop.access_token),
+    connected: activeProvider === 'google_fitbit' ? !!(tokensGoogle && tokensGoogle.access_token) : !!(tokensWhoop && (tokensWhoop.access_token || tokensWhoop.refresh_token)),
+    refresh_token: tokensWhoop ? tokensWhoop.refresh_token : null,
     providers: {
       whoop: {
-        connected: !!(tokensWhoop && tokensWhoop.access_token),
+        connected: !!(tokensWhoop && (tokensWhoop.access_token || tokensWhoop.refresh_token)),
         has_data: Object.keys(db.getBiometrics(null, 'whoop')).length > 0
       },
       google_fitbit: {
@@ -90,7 +91,44 @@ app.get('/api/auth/status', (req, res) => {
   });
 });
 
-// 4. Disconnect Active Wearable
+// 4. Session Restore (Restores session from client-side stored refresh token on container cold start)
+app.post('/api/auth/restore', async (req, res) => {
+  const { refreshToken, provider = 'whoop' } = req.body;
+  if (!refreshToken) {
+    return res.status(400).json({ error: 'Missing refreshToken' });
+  }
+
+  try {
+    if (provider === 'whoop') {
+      const seedRecord = {
+        access_token: 'seed_restore',
+        refresh_token: refreshToken,
+        expires_at: 0
+      };
+      db.saveTokens(seedRecord, 'whoop');
+      // Trigger live token exchange with WHOOP
+      const refreshed = await whoopService.refreshTokens();
+      try {
+        await whoopService.syncAllData();
+      } catch (syncErr) {
+        console.warn('Sync on session restore warning:', syncErr.message);
+      }
+      const user = db.getUser();
+      return res.json({
+        success: true,
+        connected: true,
+        user,
+        refresh_token: refreshed.refresh_token
+      });
+    }
+    res.status(400).json({ error: `Unsupported provider for restore: ${provider}` });
+  } catch (err) {
+    console.error('Session restore failed:', err);
+    res.status(500).json({ error: 'Failed to restore session from token', details: err.message });
+  }
+});
+
+// 5. Disconnect Active Wearable
 app.post('/api/auth/disconnect', (req, res) => {
   const provider = db.getActiveProvider();
   db.clearTokens(provider);

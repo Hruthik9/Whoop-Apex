@@ -125,14 +125,103 @@ function initEventListeners() {
   }
 
   // Action Buttons
-  document.getElementById('btn-connect').addEventListener('click', () => {
-    if (state.activeProvider === 'google_fitbit') {
-      const modal = document.getElementById('modal-fitbit-connect');
-      if (modal) modal.classList.remove('hidden');
-    } else {
+  const btnConnect = document.getElementById('btn-connect');
+  if (btnConnect) {
+    btnConnect.addEventListener('click', () => {
+      if (state.activeProvider === 'google_fitbit') {
+        const modal = document.getElementById('modal-fitbit-connect');
+        if (modal) modal.classList.remove('hidden');
+      } else {
+        if (state.auth && state.auth.connected) {
+          openAccountModal();
+        } else {
+          window.location.href = '/api/auth/login';
+        }
+      }
+    });
+  }
+
+  const statusPill = document.getElementById('connection-status-pill');
+  if (statusPill) {
+    statusPill.style.cursor = 'pointer';
+    statusPill.addEventListener('click', () => {
+      if (state.activeProvider === 'google_fitbit') {
+        const modal = document.getElementById('modal-fitbit-connect');
+        if (modal) modal.classList.remove('hidden');
+      } else {
+        openAccountModal();
+      }
+    });
+  }
+
+  const userAvatar = document.querySelector('.user-avatar-circle');
+  if (userAvatar) {
+    userAvatar.style.cursor = 'pointer';
+    userAvatar.addEventListener('click', () => {
+      openAccountModal();
+    });
+  }
+
+  // WHOOP Account Manager Modal Listeners
+  const btnCloseAccount = document.getElementById('btn-close-account-modal');
+  if (btnCloseAccount) {
+    btnCloseAccount.addEventListener('click', () => {
+      const modal = document.getElementById('modal-account-manager');
+      if (modal) modal.classList.add('hidden');
+    });
+  }
+
+  const btnReauth = document.getElementById('btn-reauth-whoop');
+  if (btnReauth) {
+    btnReauth.addEventListener('click', async () => {
+      try {
+        localStorage.removeItem('whoop_apex_refresh_token');
+        await fetch('/api/auth/disconnect', { method: 'POST' });
+      } catch (e) {}
       window.location.href = '/api/auth/login';
-    }
-  });
+    });
+  }
+
+  const btnDisconnect = document.getElementById('btn-disconnect-whoop');
+  if (btnDisconnect) {
+    btnDisconnect.addEventListener('click', async () => {
+      if (confirm('Disconnect WHOOP account? Biometrics will enter simulated demo mode.')) {
+        try {
+          localStorage.removeItem('whoop_apex_refresh_token');
+          await fetch('/api/auth/disconnect', { method: 'POST' });
+        } catch (e) {}
+        const modal = document.getElementById('modal-account-manager');
+        if (modal) modal.classList.add('hidden');
+        await loadAuthStatus();
+        await loadDashboardData();
+      }
+    });
+  }
+
+  const btnCopyToken = document.getElementById('btn-copy-refresh-token');
+  if (btnCopyToken) {
+    btnCopyToken.addEventListener('click', () => {
+      const input = document.getElementById('input-account-refresh-token');
+      if (input && input.value) {
+        navigator.clipboard.writeText(input.value).then(() => {
+          btnCopyToken.innerHTML = '<span>✓ Copied!</span>';
+          setTimeout(() => {
+            btnCopyToken.innerHTML = '<span>📋 Copy</span>';
+          }, 2000);
+        });
+      }
+    });
+  }
+
+  const btnToggleVisibility = document.getElementById('btn-toggle-token-visibility');
+  if (btnToggleVisibility) {
+    btnToggleVisibility.addEventListener('click', () => {
+      const input = document.getElementById('input-account-refresh-token');
+      if (input) {
+        input.type = input.type === 'password' ? 'text' : 'password';
+      }
+    });
+  }
 
   // Fitbit Connect Modal Listeners
   const btnCloseFitbitModal = document.getElementById('btn-close-fitbit-modal');
@@ -504,6 +593,45 @@ async function loadAuthStatus() {
     state.auth = auth;
     state.activeProvider = auth.active_provider || 'whoop';
 
+    // 1. If backend has an active refresh_token, persist it to localStorage
+    if (auth.connected && auth.refresh_token) {
+      try {
+        localStorage.setItem('whoop_apex_refresh_token', auth.refresh_token);
+      } catch (e) {}
+    }
+
+    // 2. If disconnected on server (e.g. after container restart / cold start on Render), check localStorage
+    if (!auth.connected && state.activeProvider === 'whoop') {
+      let savedToken = null;
+      try {
+        savedToken = localStorage.getItem('whoop_apex_refresh_token');
+      } catch (e) {}
+
+      if (savedToken) {
+        try {
+          const restoreRes = await fetch('/api/auth/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: savedToken, provider: 'whoop' })
+          });
+          if (restoreRes.ok) {
+            const restored = await restoreRes.json();
+            if (restored.success) {
+              auth.connected = true;
+              auth.user = restored.user || auth.user;
+              state.auth.connected = true;
+              state.auth.user = auth.user;
+              if (restored.refresh_token) {
+                localStorage.setItem('whoop_apex_refresh_token', restored.refresh_token);
+              }
+            }
+          }
+        } catch (restoreErr) {
+          console.warn('Silent session restore error:', restoreErr);
+        }
+      }
+    }
+
     // Update switcher pill buttons
     const btnWhoop = document.getElementById('btn-wearable-whoop');
     const btnGoogle = document.getElementById('btn-wearable-google');
@@ -523,10 +651,17 @@ async function loadAuthStatus() {
     const isConnected = auth.connected;
     const providerName = state.activeProvider === 'google_fitbit' ? 'Fitbit' : 'WHOOP';
 
+    // Update user avatar initial
+    const avatar = document.querySelector('.user-avatar-circle');
+    if (avatar && auth.user && auth.user.first_name) {
+      avatar.textContent = auth.user.first_name.charAt(0).toUpperCase();
+      avatar.title = `${auth.user.first_name} ${auth.user.last_name || ''}`.trim();
+    }
+
     if (isConnected) {
       pill.className = 'status-pill status-connected';
       text.textContent = auth.user ? (auth.user.first_name || `${providerName} Linked`) : `${providerName} Linked`;
-      btnConnect.textContent = `${providerName} Linked`;
+      btnConnect.textContent = `${providerName} Linked ⚙️`;
       btnConnect.style.background = 'rgba(0, 240, 118, 0.15)';
       btnConnect.style.color = '#00F076';
       btnConnect.style.border = '1px solid rgba(0, 240, 118, 0.3)';
@@ -554,6 +689,46 @@ async function loadAuthStatus() {
   } catch (err) {
     console.error('Error fetching auth status:', err);
   }
+}
+
+function openAccountModal() {
+  const modal = document.getElementById('modal-account-manager');
+  if (!modal) return;
+  const nameEl = document.getElementById('account-modal-name');
+  const emailEl = document.getElementById('account-modal-email');
+  const badgeEl = document.getElementById('account-modal-badge');
+  const tokenInput = document.getElementById('input-account-refresh-token');
+
+  if (state.auth && state.auth.user) {
+    nameEl.textContent = `${state.auth.user.first_name || ''} ${state.auth.user.last_name || ''}`.trim() || 'WHOOP Athlete';
+    emailEl.textContent = state.auth.user.email || 'WHOOP Cloud Linked';
+  } else {
+    nameEl.textContent = state.auth && state.auth.connected ? 'WHOOP Athlete' : 'Not Connected';
+    emailEl.textContent = state.auth && state.auth.connected ? 'Live OAuth Linked' : 'Click Switch Account to log in';
+  }
+
+  if (badgeEl) {
+    if (state.auth && state.auth.connected) {
+      badgeEl.className = 'status-pill status-connected';
+      badgeEl.textContent = 'Connected (Auto-Saved)';
+    } else {
+      badgeEl.className = 'status-pill status-disconnected';
+      badgeEl.textContent = 'Disconnected';
+    }
+  }
+
+  let savedToken = (state.auth && state.auth.refresh_token) || '';
+  if (!savedToken) {
+    try {
+      savedToken = localStorage.getItem('whoop_apex_refresh_token') || '';
+    } catch (e) {}
+  }
+
+  if (tokenInput) {
+    tokenInput.value = savedToken;
+  }
+
+  modal.classList.remove('hidden');
 }
 
 async function loadDashboardData() {

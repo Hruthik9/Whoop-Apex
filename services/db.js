@@ -120,7 +120,20 @@ class DB {
   // Token management
   getTokens(provider = this.getActiveProvider()) {
     const data = this.load();
-    return provider === 'google_fitbit' ? data.tokens_google : data.tokens;
+    let tokens = provider === 'google_fitbit' ? data.tokens_google : data.tokens;
+
+    // Persistent Fallback: If no tokens on disk (e.g. Render ephemeral container), check environment variables!
+    if (!tokens && provider === 'whoop' && process.env.WHOOP_REFRESH_TOKEN) {
+      tokens = {
+        access_token: process.env.WHOOP_ACCESS_TOKEN || 'seed_token',
+        refresh_token: process.env.WHOOP_REFRESH_TOKEN,
+        expires_at: 0, // Triggers immediate token refresh on first API call
+        scope: 'offline read:recovery read:cycles read:workout read:sleep read:profile read:body_measurement'
+      };
+      this.data.tokens = tokens;
+      this.save();
+    }
+    return tokens;
   }
 
   saveTokens(tokens, provider = this.getActiveProvider()) {
