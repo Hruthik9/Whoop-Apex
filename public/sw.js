@@ -1,4 +1,4 @@
-const CACHE_NAME = 'whoop-apex-v2';
+const CACHE_NAME = 'whoop-apex-v2.1';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',

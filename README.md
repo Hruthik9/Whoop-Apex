@@ -45,8 +45,8 @@ WHOOP-Apex began as a dedicated local WHOOP dashboard and evolved into an enterp
 ├──────────────────────────────────────┬──────────────────────────────────────┤
 │  v1.0 • WHOOP Sovereign Core         │  v2.0 • Multi-Wearable AI Ecosystem  │
 ├──────────────────────────────────────┼──────────────────────────────────────┤
-│ • Pure WHOOP 4.0 Telemetry           │ • Dual-Provider Architecture:        │
-│ • Exact Millisecond Sleep Staging    │   - WHOOP 4.0 Live API               │
+│ • Pure WHOOP 5.0 (API-Agnostic) Telemetry│ • Dual-Provider Architecture:    │
+│ • Exact Millisecond Sleep Staging    │   - WHOOP 5.0 (Latest) Live API      │
 │ • Empirical Habit Delta Engine       │   - Google Health / Fitbit API       │
 │ • Hypertrophy & Fat Loss Lab         │ • Gemini AI Physiological Copilot    │
 │ • Uth-Sørensen VO2 Max Estimation    │ • Standalone Mobile PWA + Bottom Dock│
@@ -61,7 +61,7 @@ WHOOP-Apex began as a dedicated local WHOOP dashboard and evolved into an enterp
 
 | Feature | v1.0 (WHOOP Sovereign Core) | v2.0 (WHOOP-Apex Multi-Wearable AI) |
 | :--- | :--- | :--- |
-| **Supported Devices** | WHOOP 4.0 only | **WHOOP 4.0** + **Google Pixel Watch & Fitbit Sense 2** |
+| **Supported Devices** | **WHOOP 5.0 (Latest)** & 4.0 (Hardware-Agnostic API) | **WHOOP 5.0 / 4.0** + **Google Pixel Watch & Fitbit Sense 2** |
 | **Wearable Switching** | Single provider | **1-Click Live Switcher** (blends steps/active zones cleanly; masks when in WHOOP mode) |
 | **AI Intelligence** | Rule-based heuristics | **Gemini AI Physiological Copilot** (conversational analysis, active session memory, context-aware) |
 | **Mobile Experience** | Desktop responsive | **Full Native PWA**: Fullscreen standalone, thumb-nav bottom dock, custom "Apex Pulse" icons |
@@ -77,22 +77,22 @@ WHOOP-Apex began as a dedicated local WHOOP dashboard and evolved into an enterp
 WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 Mode** or unlock the full **v2 Mode**:
 
 ### 🔹 Mode 1: v1 Sovereign WHOOP-Only Mode
-*Best for athletes who only wear a WHOOP strap and desire a minimal, lightning-fast, zero-bloat dashboard.*
-- **How it works**: By default, WHOOP is the primary provider. When in WHOOP mode, all third-party metrics (Fitbit steps, active zone minutes) are cleanly hidden from the UI.
+*Best for athletes who wear a WHOOP strap (latest WHOOP 5.0 or 4.0) and desire a minimal, lightning-fast, zero-bloat dashboard.*
+- **How it works**: By default, WHOOP is the primary provider. Telemetry is pulled directly from WHOOP's official Developer API (hardware-agnostic, supporting the latest WHOOP 5.0 and previous generations). All third-party metrics (Fitbit steps, active zone minutes) are cleanly hidden from the UI.
 - **Requirements**: Only WHOOP developer credentials (`WHOOP_CLIENT_ID` and `WHOOP_CLIENT_SECRET`). No Google account or Gemini API key required.
 - **Key benefits**:
-  - Pure WHOOP 4.0 data stream.
+  - Pure WHOOP 5.0 live cloud API data stream.
   - Zero-discrepancy millisecond sleep staging (100% match with WHOOP app).
   - 30-day habit correlation matrix.
   - Aragon-McDonald hypertrophy projections and Uth-Sørensen VO₂ Max calculator.
 
 ### 🔹 Mode 2: v2 WHOOP-Apex Multi-Wearable AI Platform
-*Best for athletes with multiple devices (WHOOP + Google Pixel Watch / Fitbit) or those who want an intelligent AI sports scientist copilot.*
-- **How it works**: Unlocks the 1-click provider switcher in the top bar, integrates Google Health / Fitbit telemetry, powers up the conversational Gemini AI coach, and enables mobile PWA installation with 24/7 cloud availability.
+*Best for athletes with multiple devices (WHOOP 5.0 + Google Pixel Watch / Fitbit) or those who want an intelligent AI sports scientist copilot.*
+- **How it works**: Unlocks the 1-click provider switcher in the top bar, integrates Google Health / Fitbit telemetry alongside WHOOP 5.0, powers up the conversational Gemini AI coach, and enables mobile PWA installation with 24/7 cloud availability.
 - **Requirements**: WHOOP credentials + `GEMINI_API_KEY` (free from Google AI Studio).
 - **Key benefits**:
   - Live Gemini AI Copilot for personalized recovery diagnostics and training recommendations.
-  - Seamless toggle between WHOOP 4.0 and Google Pixel Watch / Fitbit.
+  - Seamless toggle between WHOOP 5.0 and Google Pixel Watch / Fitbit.
   - Native mobile PWA with thumb-dock navigation.
   - Permanent 24/7 deployment on Render with automatic token restoration across cold starts.
   - Dynamic 1 Month (30d), 2 Weeks (14d), and 1 Week (7d) trend graphs.
@@ -108,7 +108,8 @@ WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 M
 - **Ergonomic Chat Console**: Messages stream cleanly on top while the input bar remains docked at the bottom for thumb ergonomics on smartphones and desktops.
 
 ### 2. ⌚ Multi-Wearable Ecosystem: WHOOP & Google Fitbit (v2)
-- **Seamless Provider Switching**: Switch between WHOOP 4.0 and Google Fitbit / Pixel Watch with a single click in the header.
+- **Seamless Provider Switching**: Switch between WHOOP 5.0 (Latest API) and Google Fitbit / Pixel Watch with a single click in the header.
+- **Hardware-Agnostic Cloud Sync**: Connects directly via WHOOP API v2, pulling real-time biometrics from the latest WHOOP 5.0 strap or earlier devices without local bluetooth dependencies.
 - **Unified Biometric Normalization**: Automatically maps disparate metrics (WHOOP Strain vs Fitbit Active Zone Minutes, WHOOP Sleep Debt vs Fitbit Sleep Score).
 - **Interface Harmony**: When in WHOOP mode, Fitbit-specific metrics are cleanly hidden to preserve a pure, focused cockpit.
 - **30-Day High-Fidelity Simulation**: Includes instant access to 30 days of realistic Pixel Watch biometrics to test all features without requiring physical Google hardware.
@@ -381,6 +382,9 @@ Whoop-Apex/
 ---
 
 ## ❓ Troubleshooting & FAQs
+
+### Q: Does WHOOP-Apex work with WHOOP 5.0?
+**A:** **Yes, 100%!** WHOOP-Apex pulls all recovery, strain, sleep, and cardiovascular telemetry directly from the official **WHOOP Developer REST API v2**. Because all WHOOP strap generations (including the latest **WHOOP 5.0** and WHOOP 4.0) sync their data to WHOOP's secure cloud, WHOOP-Apex automatically ingests and computes your physiological metrics regardless of which physical band you wear.
 
 ### Q: Why do I get a `400 invalid_request` during token refresh?
 **A:** The WHOOP OAuth 2.0 specification strictly requires `scope: 'offline'` in the token refresh POST body to `https://api.prod.whoop.com/oauth/oauth2/token`. WHOOP-Apex includes this parameter automatically alongside an atomic refresh mutex lock to eliminate concurrency race conditions.

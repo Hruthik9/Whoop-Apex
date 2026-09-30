@@ -330,8 +330,8 @@ class AICoachService {
       ];
 
       const systemInstruction = `You are WHOOP Coach AI, an elite, caring human performance coach.
-The user is tracking their biometrics using ${provider === 'google_fitbit' ? 'Google Pixel Watch / Fitbit' : 'WHOOP 4.0'}.
-Biometrics are freshly synced from their wearable.
+The user is tracking their biometrics using ${provider === 'google_fitbit' ? 'Google Pixel Watch / Fitbit' : 'WHOOP (Latest 5.0 / API)'}.
+The biometrics are freshly synced from their wearable.
 
 PHYSIOLOGICAL TELEMETRY (${analysis.date}):
 - Recovery: ${analysis.recovery.score}% (${analysis.recovery.category})
