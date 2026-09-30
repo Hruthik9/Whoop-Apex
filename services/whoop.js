@@ -65,39 +65,53 @@ class WhoopService {
   }
 
   async refreshTokens() {
-    const tokens = db.getTokens();
-    if (!tokens || !tokens.refresh_token) {
-      throw new Error('No refresh token available');
+    // Atomic mutex: If a token refresh is already pending, return existing promise to avoid token desync
+    if (this._refreshPromise) {
+      return this._refreshPromise;
     }
 
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: tokens.refresh_token,
-      client_id: this.clientId,
-      client_secret: this.clientSecret
-    });
+    this._refreshPromise = (async () => {
+      try {
+        const tokens = db.getTokens();
+        if (!tokens || !tokens.refresh_token) {
+          throw new Error('No refresh token available');
+        }
 
-    const res = await fetch(WHOOP_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: body.toString()
-    });
+        const body = new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: tokens.refresh_token,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+          scope: 'offline'
+        });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Failed to refresh token: ${res.status} - ${errText}`);
-    }
+        const res = await fetch(WHOOP_TOKEN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString()
+        });
 
-    const data = await res.json();
-    const updated = {
-      access_token: data.access_token,
-      refresh_token: data.refresh_token || tokens.refresh_token,
-      expires_at: Date.now() + (data.expires_in * 1000),
-      scope: data.scope || tokens.scope
-    };
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed to refresh token: ${res.status} - ${errText}`);
+        }
 
-    db.saveTokens(updated);
-    return updated;
+        const data = await res.json();
+        const updated = {
+          access_token: data.access_token,
+          refresh_token: data.refresh_token || tokens.refresh_token,
+          expires_at: Date.now() + (data.expires_in * 1000),
+          scope: data.scope || tokens.scope
+        };
+
+        db.saveTokens(updated);
+        return updated;
+      } finally {
+        this._refreshPromise = null;
+      }
+    })();
+
+    return this._refreshPromise;
   }
 
   async getValidAccessToken() {
