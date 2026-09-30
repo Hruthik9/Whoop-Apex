@@ -122,10 +122,10 @@ WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 M
 ### 4. 🧪 Habit Correlation & Statistical Delta Matrix (v1 & v2)
 - **Empirical Causality**: Discovers which habits statistically correlate with higher or lower recovery across 30+ days of historical telemetry.
 - **Quantified Deltas**:
-  - Recovery Score Impact ($\pm\%$)
-  - Heart Rate Variability Impact ($\pm\text{ms}$)
-  - Resting Heart Rate Shift ($\pm\text{bpm}$)
-  - Slow Wave Deep Sleep Duration ($\pm\text{min}$)
+  - Recovery Score Impact (±%)
+  - Heart Rate Variability Impact (±ms)
+  - Resting Heart Rate Shift (±bpm)
+  - Slow Wave Deep Sleep Duration (±min)
 - **Actionable Confidence Ratings**: Categorizes habits into *Super Boosters* and *Severe Disrupters* with statistical confidence badges.
 
 ### 5. 🔬 Hypertrophy & Fat-Loss Velocity Lab (v1 & v2)
@@ -133,12 +133,19 @@ WHOOP-Apex gives you complete flexibility over your setup. You can run in **v1 M
   - **Muscle Gain (Lean Bulk)**: +350 kcal surplus, 2.1 g/kg protein for optimal Muscle Protein Synthesis (MPS), 1.0 g/kg healthy fats.
   - **Fat Loss (Cut & Shred)**: -450 kcal safe deficit (3,150 kcal/wk), 2.3 g/kg lean-sparing protein, 0.8 g/kg essential hormone floor.
 - **30 / 60 / 90 / 180-Day Projections**: Uses the peer-reviewed Aragon–McDonald physiological body composition model to forecast muscle growth and fat oxidation trajectories.
-- **Leucine & Nutrient Timing**: 4-meal distribution schedule calibrated to trigger the $\ge 3.2\text{g}$ leucine threshold for muscle protein synthesis.
+- **Leucine & Nutrient Timing**: 4-meal distribution schedule calibrated to trigger the ≥ 3.2g leucine threshold for muscle protein synthesis.
 
 ### 6. 🫀 Cardiorespiratory Ceiling & VO₂ Max Protocols (v1 & v2)
 - **Uth–Sørensen Physiological Calculation**:
-  $$\text{VO}_2\text{ Max} = 15.3 \times \left( \frac{\text{HR}_{\text{max}}}{\text{HR}_{\text{rest}}} \right)$$
-  *(Using Tanaka's formula $\text{HR}_{\text{max}} = 208 - 0.7 \times \text{age}$ paired with nocturnal baseline resting heart rate).*
+  ```text
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │  VO₂ Max (ml/kg/min) = 15.3 × (HR_max / HR_rest)                       │
+  │                                                                        │
+  │  • HR_max  = 208 - (0.7 × Age)   [Tanaka Formula]                      │
+  │  • HR_rest = Nocturnal Baseline Resting Heart Rate (from WHOOP / API)  │
+  └────────────────────────────────────────────────────────────────────────┘
+  ```
+  Pairs nocturnal resting heart rate telemetry with age-calibrated Tanaka peak heart rate to determine aerobic cardiorespiratory capacity without needing laboratory spirometry.
 - **Evidence-Based Conditioning Plans**:
   - **Norwegian 4x4 (Gold Standard)**: 4 intervals of 4 min at 90–95% HRmax with 3 min Zone 2 recovery.
   - **Zone 2 Polarized Base**: 45–60 min at 60–70% HRmax to build mitochondrial density and capillary beds.
@@ -231,7 +238,7 @@ Fork or push this repository to your GitHub account (`https://github.com/your-us
 
 #### Step 2: Create Web Service on Render
 1. Go to [dashboard.render.com](https://dashboard.render.com).
-2. Click **+ New** $\rightarrow$ **Web Service**.
+2. Click **+ New** → **Web Service**.
 3. Select **Build and deploy from a Git repository** and connect your `Whoop-Apex` repository.
 
 #### Step 3: Configure Render Settings
