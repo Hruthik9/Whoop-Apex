@@ -2343,7 +2343,8 @@ async function handleAICoachQuery(prompt) {
   `;
   container.appendChild(loadingRow);
   container.scrollTop = container.scrollHeight;
-  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  const formInput = document.getElementById('form-ai-coach-chat');
+  if (formInput) formInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   // Transition loading text to synthesis after 650ms
   const stageTimer = setTimeout(() => {
@@ -2438,7 +2439,8 @@ async function handleAICoachQuery(prompt) {
       { role: 'model', text: data.reply }
     );
 
-    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const formInput = document.getElementById('form-ai-coach-chat');
+    if (formInput) formInput.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   } catch (err) {
     clearTimeout(stageTimer);
     const loader = document.getElementById('chat-loading-bubble');

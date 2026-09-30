@@ -3266,7 +3266,8 @@ body {
 }
 
 .ai-chat-response-box {
-  margin-top: 14px;
+  margin-top: 0;
+  margin-bottom: 14px;
   background: #0D1117;
   border: 1px solid rgba(48, 110, 232, 0.35);
   border-radius: 16px;
@@ -4468,6 +4469,8 @@ body {
     box-sizing: border-box !important;
     padding: 12px !important;
     border-radius: 12px !important;
+    margin-top: 0 !important;
+    margin-bottom: 10px !important;
   }
 
   .ai-chat-messages-container {
