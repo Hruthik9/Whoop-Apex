@@ -1,12 +1,14 @@
-const CACHE_NAME = 'whoop-apex-v1';
+const CACHE_NAME = 'whoop-apex-v2';
 const STATIC_ASSETS = [
   '/',
   '/css/styles.css',
   '/js/app.js',
   '/manifest.json',
+  '/favicon.ico',
+  '/icons/favicon-32x32.png',
+  '/icons/favicon-16x16.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
-  '/icons/icon.svg',
   '/icons/apple-touch-icon.png'
 ];
 
