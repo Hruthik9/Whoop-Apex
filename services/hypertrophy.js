@@ -22,7 +22,10 @@ class HypertrophyService {
     const rhr = dayBio.recovery?.resting_heart_rate || 65;
 
     // Basal Metabolic Rate (Mifflin-St Jeor equation)
-    const bmrKcal = Math.round(10 * weightKg + 6.25 * heightCm - 5 * 25 + 5); // ~1730 kcal
+    // B5 fix: age/sex now come from the body profile (POST /api/user/body) instead of hardcoded values
+    const ageYears = body.age || 25;
+    const sexConstant = body.sex === 'female' ? -161 : 5;
+    const bmrKcal = Math.round(10 * weightKg + 6.25 * heightCm - 5 * ageYears + sexConstant);
     
     // WHOOP energy expenditure: 1 kJ = 0.239006 kcal
     const totalKj = dayBio.strain?.kilojoules || 0;
@@ -107,10 +110,21 @@ class HypertrophyService {
       {
         title: 'Zone 2 Mitochondrial Base (Polarized 80/20)',
         frequency: '3-4x per week (45-60 min)',
-        target_hr: `${Math.round(maxHr * 0.60)} - ${Math.round(maxHr * 0.70)} bpm (114-133 bpm)`,
+        target_hr: `${Math.round(maxHr * 0.60)} - ${Math.round(maxHr * 0.70)} bpm (60-70% HRmax)`,
         description: 'Conversational aerobic pace. Expands mitochondrial density, improves capillary vascularization, and maximizes fat oxidation while keeping stress hormones low.'
       }
     ];
+
+    // Fitness age estimate (B5 fix — was hardcoded to 24).
+    // Linear age-norm model: average male VO2max ≈ 46 mL/kg/min at age 20,
+    // declining ≈ 0.45 mL/kg/min per year. Fitness age = the age at which the
+    // measured VO2max would be exactly average. Null when age is unknown
+    // (frontend keeps its previous fallback in that case).
+    let fitnessAge = null;
+    if (body.age && vo2MaxEstimated) {
+      fitnessAge = Math.round(20 + (46 - vo2MaxEstimated) / 0.45);
+      fitnessAge = Math.max(15, Math.min(90, fitnessAge));
+    }
 
     // -------------------------------------------------------------
     // Metabolic Efficiency Lab
@@ -213,7 +227,8 @@ class HypertrophyService {
         vo2_max: vo2MaxEstimated,
         tier: vo2Tier,
         percentile: vo2Percentile,
-        fitness_age: 24,
+        fitness_age: fitnessAge,
+        fitness_age_estimated: fitnessAge !== null,
         protocols: vo2Protocols
       },
       metabolism: {
@@ -236,7 +251,7 @@ class HypertrophyService {
         is_gain: isGain,
         title: isGain ? 'Hypertrophy Velocity & Timeline Projections' : 'Fat Loss Velocity & Timeline Projections',
         subtitle: isGain
-          ? 'Scientifically modeled for Hruthik (78.5 kg) with +350 kcal surplus (Aragon-McDonald physiological rate model)'
+          ? `Scientifically modeled for ${user.first_name || 'Athlete'} (${weightKg} kg) with +350 kcal surplus (Aragon-McDonald physiological rate model)`
           : 'Calibrated to -450 kcal deficit (3,150 kcal/wk) with 2.3 g/kg protein lean-mass sparing',
         rate_headline: isGain
           ? 'Approx. Muscle Gain Rate: ~1.1% Lean Mass / Month (+0.9 kg/mo)'
@@ -276,6 +291,7 @@ class HypertrophyService {
       updated_at: new Date().toISOString()
     };
     db.save(store);
+    db.data = store; // B8 fix: keep the in-memory singleton in sync with what was just saved
     return store.nutrition_logs[date];
   }
 }

@@ -40,8 +40,17 @@ class AICoachService {
     const rhr = recovery.resting_heart_rate ?? 65;
     const respRate = sleep.respiratory_rate ?? 16.5;
 
-    // Calculate 7-day rolling baselines from history
-    const recent = history.slice(-7);
+    // Calculate 7-day rolling baselines from history, EXCLUDING the target day itself
+    // (B4 fix — including it biased every delta toward zero)
+    const targetDate = dayRecord && dayRecord.date;
+    let priorDays = history;
+    if (targetDate) {
+      const filtered = history.filter(h => h && h.date && h.date < targetDate);
+      if (filtered.length) priorDays = filtered;
+    } else if (history.length) {
+      priorDays = history.slice(0, -1);
+    }
+    const recent = priorDays.slice(-7);
     const avgHrv = recent.length ? Math.round(recent.reduce((acc, h) => acc + (h.recovery?.hrv_ms || hrv), 0) / recent.length) : hrv;
     const avgRhr = recent.length ? Math.round(recent.reduce((acc, h) => acc + (h.recovery?.resting_heart_rate || rhr), 0) / recent.length) : rhr;
     const avgResp = recent.length ? Math.round((recent.reduce((acc, h) => acc + (h.sleep?.respiratory_rate || respRate), 0) / recent.length) * 10) / 10 : respRate;
@@ -363,7 +372,11 @@ CORE COACHING INSTRUCTIONS:
           const role = (turn.role === 'model' || turn.role === 'assistant' || turn.role === 'coach') ? 'model' : 'user';
           const text = typeof turn.text === 'string' ? turn.text.trim() : (typeof turn.content === 'string' ? turn.content.trim() : '');
           if (text) {
-            if (contents.length === 0 || contents[contents.length - 1].role !== role) {
+            const last = contents[contents.length - 1];
+            if (last && last.role === role) {
+              // B3 fix: merge consecutive same-role turns instead of silently dropping them
+              last.parts[0].text += `\n${text}`;
+            } else {
               contents.push({ role, parts: [{ text }] });
             }
           }
