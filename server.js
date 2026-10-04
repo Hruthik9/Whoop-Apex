@@ -10,6 +10,7 @@ const googleHealthService = require('./services/googleHealth');
 const aiCoachService = require('./services/aiCoach');
 const analyticsService = require('./services/analytics');
 const hypertrophyService = require('./services/hypertrophy');
+const deepInsightsService = require('./services/deepInsights');
 const { populateDemoData } = require('./services/demoData');
 
 const app = express();
@@ -103,6 +104,13 @@ app.use('/api', (req, res, next) => {
   if (AUTH_EXEMPT.has(req.path)) return next();
   return requireAppAuth(req, res, next);
 });
+
+// Server-local YYYY-MM-DD (B6 fix — toISOString() is UTC and rolls the date
+// forward for US-evening requests)
+function localDateString(d = new Date()) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
 
 // -------------------------------------------------------------
 // WHOOP OAuth 2.0 Endpoints
@@ -317,23 +325,8 @@ app.post('/api/wearable/switch', (req, res) => {
   }
 });
 
-app.post('/api/whoop/sync', async (req, res) => {
-  try {
-    const active = db.getActiveProvider();
-    let result;
-    if (active === 'google_fitbit') {
-      result = await googleHealthService.syncAllData();
-    } else {
-      result = await whoopService.syncAllData();
-    }
-    res.json(result);
-  } catch (err) {
-    console.error('Sync failed:', err);
-    res.status(500).json({ error: 'Sync failed', message: err.message });
-  }
-});
-
-app.post('/api/wearable/sync', async (req, res) => {
+// B7 fix: one shared sync implementation (was duplicated across two endpoints)
+async function handleWearableSync(req, res) {
   try {
     const active = db.getActiveProvider();
     const result = active === 'google_fitbit'
@@ -341,9 +334,13 @@ app.post('/api/wearable/sync', async (req, res) => {
       : await whoopService.syncAllData();
     res.json(result);
   } catch (err) {
+    console.error('Sync failed:', err);
     res.status(500).json({ error: 'Sync failed', message: err.message });
   }
-});
+}
+app.post('/api/whoop/sync', handleWearableSync);
+
+app.post('/api/wearable/sync', handleWearableSync); // legacy alias
 
 // -------------------------------------------------------------
 // Biometrics & Dashboard Data
@@ -377,7 +374,7 @@ app.get('/api/data', (req, res) => {
 
 // Get list of habits and today's logs
 app.get('/api/habits', (req, res) => {
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const date = req.query.date || localDateString();
   const habits = db.getHabits();
   const dailyLogs = db.getHabitLogs(date);
   const allLogs = db.getHabitLogs();
@@ -468,11 +465,93 @@ app.post('/api/hypertrophy/log', (req, res) => {
   }
 });
 
+app.post('/api/user/body', (req, res) => {
+  try {
+    const user = db.getUser() || {};
+    const body = { ...(user.body || {}) };
+    const input = req.body || {};
+    ['weight_kilogram', 'height_meter', 'max_heart_rate', 'age'].forEach((k) => {
+      if (input[k] !== undefined) {
+        const n = Number(input[k]);
+        if (Number.isFinite(n) && n > 0) body[k] = n;
+      }
+    });
+    if (typeof input.sex === 'string' && ['male', 'female'].includes(input.sex.toLowerCase())) {
+      body.sex = input.sex.toLowerCase();
+    }
+    user.body = body;
+    db.saveUser(user);
+    res.json({ success: true, body });
+  } catch (err) {
+    console.error('Error saving body profile:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/user/body', (req, res) => {
   const user = db.getUser() || {};
   res.json({
     body: user.body || { height_meter: 1.70, weight_kilogram: 78.5, max_heart_rate: 190 }
   });
+});
+
+// -------------------------------------------------------------
+// Deep Insights: WHOOP export upload + analysis
+// -------------------------------------------------------------
+
+// Analyze uploaded WHOOP export CSVs (sent as text in JSON — no extra deps).
+// Body: { files: { cycles?, sleeps?, workouts?, journals? }, goal?: 'vo2max'|'sleep'|'strength' }
+app.post('/api/insights/analyze', (req, res) => {
+  try {
+    const { files = {}, goal = 'vo2max' } = req.body || {};
+    const names = ['cycles', 'sleeps', 'workouts', 'journals'];
+    const MAX_FILE = 5 * 1024 * 1024, MAX_TOTAL = 15 * 1024 * 1024;
+    let total = 0;
+    for (const n of names) {
+      const t = files[n];
+      if (t === undefined || t === null) continue;
+      if (typeof t !== 'string') return res.status(400).json({ error: `File '${n}' must be CSV text.` });
+      total += Buffer.byteLength(t, 'utf8');
+      if (Buffer.byteLength(t, 'utf8') > MAX_FILE) {
+        return res.status(400).json({ error: `File '${n}' exceeds the 5 MB limit.` });
+      }
+    }
+    if (total === 0) return res.status(400).json({ error: 'Upload at least one WHOOP export CSV.' });
+    if (total > MAX_TOTAL) return res.status(400).json({ error: 'Combined upload exceeds 15 MB.' });
+    if (!['vo2max', 'sleep', 'strength'].includes(goal)) {
+      return res.status(400).json({ error: 'goal must be vo2max, sleep, or strength.' });
+    }
+
+    const { records, warnings, journalQuestions } = deepInsightsService.parseWhoopExport(files);
+    if (!records.length) {
+      return res.status(400).json({ error: 'No valid cycles found in the uploaded files.', warnings });
+    }
+    const analysis = deepInsightsService.analyzeDeepInsights(records);
+    const user = db.getUser() || {};
+    const roadmap = deepInsightsService.buildRoadmap(goal, analysis, user.body || {});
+
+    const payload = {
+      goal,
+      summary: analysis.summary,
+      insights: analysis.insights,
+      habitImpacts: analysis.habitImpacts,
+      trends: analysis.trends,
+      roadmap,
+      warnings,
+      journalQuestionCount: journalQuestions.length,
+      recordCount: records.length,
+    };
+    db.saveDeepInsights(payload);
+    res.json({ success: true, ...payload });
+  } catch (err) {
+    console.error('Deep insights analysis failed:', err);
+    res.status(500).json({ error: 'Analysis failed', message: err.message });
+  }
+});
+
+// Last saved Deep Insights analysis
+app.get('/api/insights', (req, res) => {
+  res.json({ insights: db.getDeepInsights() });
 });
 
 // -------------------------------------------------------------
@@ -569,7 +648,7 @@ app.post('/api/ai/coach/chat', async (req, res) => {
 
     let targetDate = date;
     if (!targetDate || !biometrics[targetDate]) {
-      targetDate = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().split('T')[0];
+      targetDate = dates.length > 0 ? dates[dates.length - 1] : localDateString();
     }
     const targetRecord = biometrics[targetDate] ? { date: targetDate, ...biometrics[targetDate] } : null;
 

@@ -99,6 +99,16 @@ class DB {
     fs.renameSync(tempFile, DB_FILE);
   }
 
+  // Deep Insights (WHOOP export analysis)
+  getDeepInsights() {
+    return this.load().deep_insights || null;
+  }
+  saveDeepInsights(payload) {
+    this.data.deep_insights = { ...payload, saved_at: new Date().toISOString() };
+    this.save();
+    return this.data.deep_insights;
+  }
+
   getSnapshot() {
     return this.load();
   }
