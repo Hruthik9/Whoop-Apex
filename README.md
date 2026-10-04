@@ -215,6 +215,12 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 # Server Port
 PORT=3000
+
+# Security hardening (recommended before any public/network exposure)
+# Generate with: openssl rand -hex 32
+SESSION_SECRET=
+# Optional app lock (>= 8 chars). When set, the UI asks for this password once per device.
+APEX_PASSWORD=
 ```
 
 #### 5. Launch Application
@@ -226,6 +232,11 @@ npm start
 npm run dev
 ```
 Open **[http://localhost:3000](http://localhost:3000)** in your browser!
+
+> 🔒 **Security notes**
+> - WHOOP refresh tokens are AES-256-GCM sealed before they ever reach the browser; only set `SESSION_SECRET` to keep restores working across restarts.
+> - Set `APEX_PASSWORD` (8+ chars) to lock every `/api` route behind a one-time in-app unlock — do this before exposing the app beyond localhost.
+> - CORS defaults to same-origin only; override with `CORS_ORIGIN` if you host the frontend separately.
 
 ---
 
