@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 
 const db = require('./services/db');
 const whoopService = require('./services/whoop');
@@ -9,14 +10,107 @@ const googleHealthService = require('./services/googleHealth');
 const aiCoachService = require('./services/aiCoach');
 const analyticsService = require('./services/analytics');
 const hypertrophyService = require('./services/hypertrophy');
+const deepInsightsService = require('./services/deepInsights');
 const { populateDemoData } = require('./services/demoData');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '20mb' })); // Deep Insights posts CSVs as JSON text (route caps at 15 MB total)
 app.use(express.static(path.join(__dirname, 'public')));
+
+// -------------------------------------------------------------
+// Pixie security hardening (2026-10-04)
+//  - CORS locked to same-origin unless CORS_ORIGIN is explicitly set
+//  - Basic security headers
+//  - WHOOP refresh tokens are AES-256-GCM sealed before ever leaving
+//    the server; the browser only ever sees the sealed blob (B1 fix)
+//  - Optional app lock via APEX_PASSWORD: all /api routes require an
+//    HttpOnly cookie session after unlock (B2 fix)
+// -------------------------------------------------------------
+const corsOrigins = (process.env.CORS_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
+app.use(cors(corsOrigins.length ? { origin: corsOrigins, credentials: true } : { origin: false }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+});
+
+function getSessionSecret() {
+  const s = process.env.SESSION_SECRET;
+  if (s) return crypto.createHash('sha256').update(String(s)).digest();
+  if (!global.__apexEphemeralSecret) {
+    global.__apexEphemeralSecret = crypto.randomBytes(32);
+    console.warn('[apex] SESSION_SECRET not set — using an ephemeral secret. Sealed browser tokens and app-lock sessions will invalidate on restart. Set SESSION_SECRET for persistent restores.');
+  }
+  return global.__apexEphemeralSecret;
+}
+function sealToken(plain) {
+  const key = getSessionSecret();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(String(plain), 'utf8'), cipher.final()]);
+  return ['v1', iv.toString('base64url'), cipher.getAuthTag().toString('base64url'), enc.toString('base64url')].join('.');
+}
+function unsealToken(sealed) {
+  const parts = String(sealed || '').split('.');
+  if (parts.length !== 4 || parts[0] !== 'v1') throw new Error('bad sealed token');
+  const key = getSessionSecret();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(parts[1], 'base64url'));
+  decipher.setAuthTag(Buffer.from(parts[2], 'base64url'));
+  return Buffer.concat([decipher.update(Buffer.from(parts[3], 'base64url')), decipher.final()]).toString('utf8');
+}
+// Accepts current sealed tokens; legacy raw tokens issued before this fix are accepted once (migration).
+function resolveRefreshToken(maybeSealed) {
+  try { return unsealToken(maybeSealed); }
+  catch (e) { return String(maybeSealed || ''); }
+}
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || '').split(';').forEach(p => {
+    const i = p.indexOf('=');
+    if (i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+function issueSessionToken() {
+  const issued = Date.now().toString();
+  const sig = crypto.createHmac('sha256', getSessionSecret()).update('apex-auth:' + issued).digest('base64url');
+  return issued + '.' + sig;
+}
+function verifySessionToken(token) {
+  try {
+    const [issued, sig] = String(token || '').split('.');
+    const age = Date.now() - parseInt(issued, 10);
+    if (!issued || !sig || Number.isNaN(age) || age < 0 || age > 30 * 24 * 3600 * 1000) return false;
+    const expect = crypto.createHmac('sha256', getSessionSecret()).update('apex-auth:' + issued).digest('base64url');
+    const a = Buffer.from(sig), b = Buffer.from(expect);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (e) { return false; }
+}
+function appPasswordSet() {
+  return !!(process.env.APEX_PASSWORD && String(process.env.APEX_PASSWORD).length >= 8);
+}
+function requireAppAuth(req, res, next) {
+  if (!appPasswordSet()) return next(); // dev mode: open API, warning logged at boot
+  const cookies = parseCookies(req);
+  if (cookies.apex_session && verifySessionToken(cookies.apex_session)) return next();
+  return res.status(401).json({ error: 'unauthorized', needs_unlock: true });
+}
+// OAuth login/callback must stay public so the login flow itself works.
+const AUTH_EXEMPT = new Set(['/auth/unlock', '/auth/login', '/auth/callback', '/auth/google/login', '/auth/google/callback']);
+app.use('/api', (req, res, next) => {
+  if (AUTH_EXEMPT.has(req.path)) return next();
+  return requireAppAuth(req, res, next);
+});
+
+// Server-local YYYY-MM-DD (B6 fix — toISOString() is UTC and rolls the date
+// forward for US-evening requests)
+function localDateString(d = new Date()) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
 
 // -------------------------------------------------------------
 // WHOOP OAuth 2.0 Endpoints
@@ -73,7 +167,8 @@ app.get('/api/auth/status', (req, res) => {
   res.json({
     active_provider: activeProvider,
     connected: activeProvider === 'google_fitbit' ? !!(tokensGoogle && tokensGoogle.access_token) : !!(tokensWhoop && (tokensWhoop.access_token || tokensWhoop.refresh_token)),
-    refresh_token: tokensWhoop ? tokensWhoop.refresh_token : null,
+    // Sealed token only — the raw WHOOP refresh token never leaves the server (B1 fix)
+    restore_token: tokensWhoop && tokensWhoop.refresh_token ? sealToken(tokensWhoop.refresh_token) : null,
     providers: {
       whoop: {
         connected: !!(tokensWhoop && (tokensWhoop.access_token || tokensWhoop.refresh_token)),
@@ -97,12 +192,15 @@ app.post('/api/auth/restore', async (req, res) => {
   if (!refreshToken) {
     return res.status(400).json({ error: 'Missing refreshToken' });
   }
+  // Browser sends the sealed blob (legacy raw tokens accepted once for migration)
+  const rawToken = resolveRefreshToken(refreshToken);
+  if (!rawToken) return res.status(400).json({ error: 'Invalid restore token' });
 
   try {
     if (provider === 'whoop') {
       const seedRecord = {
         access_token: 'seed_restore',
-        refresh_token: refreshToken,
+        refresh_token: rawToken,
         expires_at: 0
       };
       db.saveTokens(seedRecord, 'whoop');
@@ -114,12 +212,36 @@ app.post('/api/auth/restore', async (req, res) => {
         console.warn('Sync on session restore warning:', syncErr.message);
       }
       const user = db.getUser();
+      const latest = db.getTokens('whoop');
       return res.json({
         success: true,
         connected: true,
         user,
-        refresh_token: refreshed.refresh_token
+        restore_token: latest && latest.refresh_token ? sealToken(latest.refresh_token) : null
       });
+
+// 4b. App lock: verify APEX_PASSWORD and issue an HttpOnly session cookie (30 days)
+app.post('/api/auth/unlock', (req, res) => {
+  if (!appPasswordSet()) return res.json({ success: true, lock_disabled: true });
+  const { password } = req.body || {};
+  const expected = String(process.env.APEX_PASSWORD);
+  const a = Buffer.from(String(password || ''));
+  const b = Buffer.from(expected);
+  const ok = a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (!ok) return res.status(401).json({ error: 'Wrong password' });
+  const secure = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  res.setHeader('Set-Cookie',
+    `apex_session=${issueSessionToken()}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${30 * 24 * 3600}${secure ? '; Secure' : ''}`);
+  return res.json({ success: true });
+});
+
+// 4c. Owner-only raw token export (powers the "copy token for Render" flow).
+// Requires the app-lock session when APEX_PASSWORD is set.
+app.get('/api/auth/token/export', (req, res) => {
+  const tokens = db.getTokens('whoop');
+  if (!tokens || !tokens.refresh_token) return res.status(404).json({ error: 'No WHOOP token on server' });
+  res.json({ refresh_token: tokens.refresh_token });
+});
     }
     res.status(400).json({ error: `Unsupported provider for restore: ${provider}` });
   } catch (err) {
@@ -203,23 +325,8 @@ app.post('/api/wearable/switch', (req, res) => {
   }
 });
 
-app.post('/api/whoop/sync', async (req, res) => {
-  try {
-    const active = db.getActiveProvider();
-    let result;
-    if (active === 'google_fitbit') {
-      result = await googleHealthService.syncAllData();
-    } else {
-      result = await whoopService.syncAllData();
-    }
-    res.json(result);
-  } catch (err) {
-    console.error('Sync failed:', err);
-    res.status(500).json({ error: 'Sync failed', message: err.message });
-  }
-});
-
-app.post('/api/wearable/sync', async (req, res) => {
+// B7 fix: one shared sync implementation (was duplicated across two endpoints)
+async function handleWearableSync(req, res) {
   try {
     const active = db.getActiveProvider();
     const result = active === 'google_fitbit'
@@ -227,9 +334,13 @@ app.post('/api/wearable/sync', async (req, res) => {
       : await whoopService.syncAllData();
     res.json(result);
   } catch (err) {
+    console.error('Sync failed:', err);
     res.status(500).json({ error: 'Sync failed', message: err.message });
   }
-});
+}
+app.post('/api/whoop/sync', handleWearableSync);
+
+app.post('/api/wearable/sync', handleWearableSync); // legacy alias
 
 // -------------------------------------------------------------
 // Biometrics & Dashboard Data
@@ -263,7 +374,7 @@ app.get('/api/data', (req, res) => {
 
 // Get list of habits and today's logs
 app.get('/api/habits', (req, res) => {
-  const date = req.query.date || new Date().toISOString().split('T')[0];
+  const date = req.query.date || localDateString();
   const habits = db.getHabits();
   const dailyLogs = db.getHabitLogs(date);
   const allLogs = db.getHabitLogs();
@@ -354,11 +465,93 @@ app.post('/api/hypertrophy/log', (req, res) => {
   }
 });
 
+app.post('/api/user/body', (req, res) => {
+  try {
+    const user = db.getUser() || {};
+    const body = { ...(user.body || {}) };
+    const input = req.body || {};
+    ['weight_kilogram', 'height_meter', 'max_heart_rate', 'age'].forEach((k) => {
+      if (input[k] !== undefined) {
+        const n = Number(input[k]);
+        if (Number.isFinite(n) && n > 0) body[k] = n;
+      }
+    });
+    if (typeof input.sex === 'string' && ['male', 'female'].includes(input.sex.toLowerCase())) {
+      body.sex = input.sex.toLowerCase();
+    }
+    user.body = body;
+    db.saveUser(user);
+    res.json({ success: true, body });
+  } catch (err) {
+    console.error('Error saving body profile:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/user/body', (req, res) => {
   const user = db.getUser() || {};
   res.json({
     body: user.body || { height_meter: 1.70, weight_kilogram: 78.5, max_heart_rate: 190 }
   });
+});
+
+// -------------------------------------------------------------
+// Deep Insights: WHOOP export upload + analysis
+// -------------------------------------------------------------
+
+// Analyze uploaded WHOOP export CSVs (sent as text in JSON — no extra deps).
+// Body: { files: { cycles?, sleeps?, workouts?, journals? }, goal?: 'vo2max'|'sleep'|'strength' }
+app.post('/api/insights/analyze', (req, res) => {
+  try {
+    const { files = {}, goal = 'vo2max' } = req.body || {};
+    const names = ['cycles', 'sleeps', 'workouts', 'journals'];
+    const MAX_FILE = 5 * 1024 * 1024, MAX_TOTAL = 15 * 1024 * 1024;
+    let total = 0;
+    for (const n of names) {
+      const t = files[n];
+      if (t === undefined || t === null) continue;
+      if (typeof t !== 'string') return res.status(400).json({ error: `File '${n}' must be CSV text.` });
+      total += Buffer.byteLength(t, 'utf8');
+      if (Buffer.byteLength(t, 'utf8') > MAX_FILE) {
+        return res.status(400).json({ error: `File '${n}' exceeds the 5 MB limit.` });
+      }
+    }
+    if (total === 0) return res.status(400).json({ error: 'Upload at least one WHOOP export CSV.' });
+    if (total > MAX_TOTAL) return res.status(400).json({ error: 'Combined upload exceeds 15 MB.' });
+    if (!['vo2max', 'sleep', 'strength'].includes(goal)) {
+      return res.status(400).json({ error: 'goal must be vo2max, sleep, or strength.' });
+    }
+
+    const { records, warnings, journalQuestions } = deepInsightsService.parseWhoopExport(files);
+    if (!records.length) {
+      return res.status(400).json({ error: 'No valid cycles found in the uploaded files.', warnings });
+    }
+    const analysis = deepInsightsService.analyzeDeepInsights(records);
+    const user = db.getUser() || {};
+    const roadmap = deepInsightsService.buildRoadmap(goal, analysis, user.body || {});
+
+    const payload = {
+      goal,
+      summary: analysis.summary,
+      insights: analysis.insights,
+      habitImpacts: analysis.habitImpacts,
+      trends: analysis.trends,
+      roadmap,
+      warnings,
+      journalQuestionCount: journalQuestions.length,
+      recordCount: records.length,
+    };
+    db.saveDeepInsights(payload);
+    res.json({ success: true, ...payload });
+  } catch (err) {
+    console.error('Deep insights analysis failed:', err);
+    res.status(500).json({ error: 'Analysis failed', message: err.message });
+  }
+});
+
+// Last saved Deep Insights analysis
+app.get('/api/insights', (req, res) => {
+  res.json({ insights: db.getDeepInsights() });
 });
 
 // -------------------------------------------------------------
@@ -455,7 +648,7 @@ app.post('/api/ai/coach/chat', async (req, res) => {
 
     let targetDate = date;
     if (!targetDate || !biometrics[targetDate]) {
-      targetDate = dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().split('T')[0];
+      targetDate = dates.length > 0 ? dates[dates.length - 1] : localDateString();
     }
     const targetRecord = biometrics[targetDate] ? { date: targetDate, ...biometrics[targetDate] } : null;
 
@@ -520,6 +713,20 @@ app.post('/api/ai/coach/chat', async (req, res) => {
   }
 });
 
+// JSON error handler: body-parser failures (e.g. 413 payload-too-large) must
+// come back as JSON, not Express's default HTML error page, so fetch callers
+// calling res.json() get a readable error instead of a SyntaxError.
+app.use((err, req, res, next) => {
+  if (!err) return next();
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({ error: 'Upload too large — the request body exceeds the 20 MB limit.' });
+  }
+  if (err.status && err.status < 500) {
+    return res.status(err.status).json({ error: err.message || 'Bad request' });
+  }
+  return next(err);
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`\n=================================================`);
@@ -527,4 +734,6 @@ app.listen(PORT, () => {
   console.log(`📡 URL: http://localhost:${PORT}`);
   console.log(`🔑 Redirect URI: ${process.env.REDIRECT_URI || `http://localhost:${PORT}/api/auth/callback`}`);
   console.log(`=================================================\n`);
+  if (!appPasswordSet()) console.warn('[apex] APEX_PASSWORD not set — API is unauthenticated (dev mode). Set APEX_PASSWORD (>=8 chars) to lock the API.');
+  if (!process.env.SESSION_SECRET) console.warn('[apex] SESSION_SECRET not set — set it for persistent sealed-token restores across restarts.');
 });

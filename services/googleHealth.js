@@ -1,4 +1,10 @@
 const db = require('./db');
+// Server-local YYYY-MM-DD (B6 fix — toISOString() is UTC, which rolls the date
+// forward for US-evening syncs)
+function localDateString(d = new Date()) {
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
 
 class GoogleHealthService {
   constructor() {
@@ -120,7 +126,7 @@ class GoogleHealthService {
     }
 
     const headers = { 'Authorization': `Bearer ${token}` };
-    const today = new Date().toISOString().split('T')[0];
+    const today = localDateString();
 
     // 1. Fetch Profile
     try {
@@ -209,7 +215,7 @@ class GoogleHealthService {
     for (let i = 29; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(d.getDate() - i);
-      const dateKey = d.toISOString().split('T')[0];
+      const dateKey = localDateString(d);
 
       // Realistic Google Pixel Watch / Fitbit Sense 2 metrics
       const rhr = 60 + Math.floor(Math.sin(i * 0.4) * 5) + (i % 3 === 0 ? 3 : 0);

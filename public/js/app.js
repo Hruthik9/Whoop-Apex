@@ -35,6 +35,65 @@ let state = {
 };
 
 // -------------------------------------------------------------
+// Pixie security: app-lock (APEX_PASSWORD) support.
+// Intercepts 401s from /api/* and shows the unlock modal once.
+// -------------------------------------------------------------
+let __unlockShown = false;
+const __nativeFetch = window.fetch.bind(window);
+window.fetch = function (url, opts) {
+  return __nativeFetch(url, opts).then((res) => {
+    if (res.status === 401) {
+      const u = typeof url === 'string' ? url : (url && url.url) || '';
+      if (u.includes('/api/')) {
+        res.clone().json()
+          .then((b) => { if (b && b.needs_unlock) showUnlockModal(); })
+          .catch(() => showUnlockModal());
+      }
+    }
+    return res;
+  });
+};
+function showUnlockModal() {
+  if (__unlockShown) return;
+  __unlockShown = true;
+  const m = document.getElementById('modal-app-unlock');
+  if (m) {
+    m.classList.remove('hidden');
+    const i = document.getElementById('input-app-password');
+    if (i) { i.value = ''; i.focus(); }
+  }
+}
+async function submitUnlock() {
+  const input = document.getElementById('input-app-password');
+  const err = document.getElementById('unlock-error');
+  try {
+    const res = await __nativeFetch('/api/auth/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: input ? input.value : '' })
+    });
+    if (res.ok) {
+      const m = document.getElementById('modal-app-unlock');
+      if (m) m.classList.add('hidden');
+      __unlockShown = false;
+      if (err) err.textContent = '';
+      if (typeof loadAuthStatus === 'function') await loadAuthStatus();
+      if (typeof updateAllViews === 'function') updateAllViews();
+    } else if (err) {
+      err.textContent = 'Wrong password — try again.';
+    }
+  } catch (e) {
+    if (err) err.textContent = 'Could not reach the server.';
+  }
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('btn-app-unlock');
+  if (btn) btn.addEventListener('click', submitUnlock);
+  const inp = document.getElementById('input-app-password');
+  if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitUnlock(); });
+});
+
+// -------------------------------------------------------------
 // Initialization
 // -------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
@@ -47,6 +106,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadCorrelations();
   await loadHypertrophyData();
   await loadAICoachInsights();
+  initDeepInsights();
   initPacerEngine('sigh');
   initPwaController();
 });
@@ -593,10 +653,11 @@ async function loadAuthStatus() {
     state.auth = auth;
     state.activeProvider = auth.active_provider || 'whoop';
 
-    // 1. If backend has an active refresh_token, persist it to localStorage
-    if (auth.connected && auth.refresh_token) {
+    // 1. If backend has an active session, persist the SEALED restore token to localStorage
+    //    (the raw WHOOP refresh token never leaves the server)
+    if (auth.connected && auth.restore_token) {
       try {
-        localStorage.setItem('whoop_apex_refresh_token', auth.refresh_token);
+        localStorage.setItem('whoop_apex_refresh_token', auth.restore_token);
       } catch (e) {}
     }
 
@@ -621,8 +682,8 @@ async function loadAuthStatus() {
               auth.user = restored.user || auth.user;
               state.auth.connected = true;
               state.auth.user = auth.user;
-              if (restored.refresh_token) {
-                localStorage.setItem('whoop_apex_refresh_token', restored.refresh_token);
+              if (restored.restore_token) {
+                localStorage.setItem('whoop_apex_refresh_token', restored.restore_token);
               }
             }
           }
@@ -717,7 +778,7 @@ function openAccountModal() {
     }
   }
 
-  let savedToken = (state.auth && state.auth.refresh_token) || '';
+  let savedToken = (state.auth && state.auth.restore_token) || '';
   if (!savedToken) {
     try {
       savedToken = localStorage.getItem('whoop_apex_refresh_token') || '';
@@ -726,6 +787,11 @@ function openAccountModal() {
 
   if (tokenInput) {
     tokenInput.value = savedToken;
+    // Replace the sealed blob with the owner-only raw token for the Render export flow
+    fetch('/api/auth/token/export')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j && j.refresh_token) tokenInput.value = j.refresh_token; })
+      .catch(() => {});
   }
 
   modal.classList.remove('hidden');
@@ -2924,3 +2990,170 @@ function initPwaController() {
   }
 }
 
+
+// -------------------------------------------------------------
+// Pixie: Deep Insights Lab — WHOOP export upload + rendering
+// -------------------------------------------------------------
+let diGoal = 'vo2max';
+const diFiles = { cycles: null, sleeps: null, workouts: null, journals: null };
+
+function initDeepInsights() {
+  // file inputs
+  Object.keys(diFiles).forEach((key) => {
+    const input = document.getElementById(`di-file-${key}`);
+    const nameEl = document.getElementById(`di-file-${key}-name`);
+    const wrap = document.getElementById(`di-file-${key}-wrap`);
+    if (!input) return;
+    input.addEventListener('change', () => {
+      const f = input.files && input.files[0];
+      diFiles[key] = f || null;
+      if (nameEl) nameEl.textContent = f ? f.name : '';
+      if (wrap) wrap.classList.toggle('filled', !!f);
+    });
+  });
+  // goal pills
+  document.querySelectorAll('.di-goal-pill').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.di-goal-pill').forEach((p) => p.classList.remove('active'));
+      pill.classList.add('active');
+      diGoal = pill.dataset.goal || 'vo2max';
+    });
+  });
+  const btn = document.getElementById('btn-di-analyze');
+  if (btn) btn.addEventListener('click', runDeepInsightsAnalysis);
+  loadSavedInsights();
+}
+
+function diSetStatus(msg, isError) {
+  const el = document.getElementById('di-status');
+  if (el) {
+    el.textContent = msg || '';
+    el.classList.toggle('error', !!isError);
+  }
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ''));
+    r.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    r.readAsText(file);
+  });
+}
+
+async function runDeepInsightsAnalysis() {
+  if (!diFiles.cycles) {
+    diSetStatus('Please attach at least physiological_cycles.csv to begin.', true);
+    return;
+  }
+  diSetStatus('Reading files…');
+  try {
+    const files = {};
+    for (const key of Object.keys(diFiles)) {
+      if (diFiles[key]) files[key] = await readFileAsText(diFiles[key]);
+    }
+    diSetStatus('Analyzing — crunching correlations and building your roadmap…');
+    const res = await fetch('/api/insights/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files, goal: diGoal }),
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Server returned a non-JSON response (HTTP ${res.status}). Please try again.`);
+    }
+    if (!res.ok) throw new Error(data.error || 'Analysis failed');
+    diSetStatus('');
+    renderDeepInsights(data);
+    document.getElementById('di-results').classList.remove('hidden');
+    document.getElementById('di-results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    console.error('Deep insights failed:', err);
+    diSetStatus(err.message || 'Analysis failed. Check the files and try again.', true);
+  }
+}
+
+async function loadSavedInsights() {
+  try {
+    const res = await fetch('/api/insights');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data && data.insights) {
+      if (data.insights.goal) {
+        diGoal = data.insights.goal;
+        document.querySelectorAll('.di-goal-pill').forEach((p) =>
+          p.classList.toggle('active', p.dataset.goal === diGoal));
+      }
+      renderDeepInsights(data.insights);
+      document.getElementById('di-results').classList.remove('hidden');
+    }
+  } catch (e) { /* no saved analysis yet */ }
+}
+
+function diFmt(n, suffix) {
+  if (n === null || n === undefined || isNaN(n)) return '--';
+  return `${n}${suffix || ''}`;
+}
+
+function renderDeepInsights(d) {
+  const s = d.summary || {};
+  // summary stats
+  document.getElementById('di-summary').innerHTML = `
+    <div class="di-stat-grid">
+      <div class="di-stat"><span class="di-stat-num">${diFmt(s.record_count)}</span><span class="di-stat-label">cycles analyzed</span></div>
+      <div class="di-stat"><span class="di-stat-num">${diFmt(s.avg_recovery, '%')}</span><span class="di-stat-label">avg recovery</span></div>
+      <div class="di-stat"><span class="di-stat-num">${diFmt(s.avg_hrv, '')}</span><span class="di-stat-label">avg HRV (ms)</span></div>
+      <div class="di-stat"><span class="di-stat-num">${diFmt(s.avg_efficiency, '%')}</span><span class="di-stat-label">sleep efficiency</span></div>
+      <div class="di-stat"><span class="di-stat-num">${s.avg_debt_min !== null && s.avg_debt_min !== undefined ? Math.round(s.avg_debt_min) + 'm' : '--'}</span><span class="di-stat-label">avg sleep debt</span></div>
+      <div class="di-stat"><span class="di-stat-num">${diFmt(s.workout_days)}</span><span class="di-stat-label">training days</span></div>
+    </div>
+    <p style="font-size:11.5px;color:var(--text-secondary);margin:-6px 0 0 0;">${s.date_from || ''} → ${s.date_to || ''}${d.warnings && d.warnings.length ? ' • ' + d.warnings.join(' ') : ''}</p>`;
+
+  // insights
+  const icons = { high: '🔴', medium: '🟡', low: '🟢' };
+  document.getElementById('di-insights').innerHTML = (d.insights || []).map((i) => `
+    <div class="di-insight sev-${i.severity || 'low'}">
+      <div class="di-insight-icon">${i.icon || '💡'}</div>
+      <div><div class="di-insight-title">${i.title || ''}</div>
+      <div class="di-insight-detail">${i.detail || ''}</div></div>
+    </div>`).join('') || '<p class="di-how">Not enough data yet for pattern detection — upload more history.</p>';
+
+  // habit impacts
+  const METALABELS = { recovery_score: ['Recovery', '%'], hrv_ms: ['HRV', 'ms'], resting_hr: ['RHR', 'bpm'], deep_min: ['Deep', 'min'], efficiency_pct: ['Efficiency', '%'], rem_min: ['REM', 'min'] };
+  const BETTER_HIGH = new Set(['recovery_score', 'hrv_ms', 'deep_min', 'efficiency_pct', 'rem_min']);
+  document.getElementById('di-habits').innerHTML = (d.habitImpacts || []).map((h) => {
+    const chips = Object.entries(h.deltas || {}).filter(([, v]) => v !== null).map(([k, v]) => {
+      const [label, unit] = METALABELS[k] || [k, ''];
+      const good = (v >= 0) === BETTER_HIGH.has(k);
+      const sign = v >= 0 ? '+' : '';
+      return `<span class="di-delta ${good ? 'good' : 'bad'}">${label} ${sign}${v}${unit}</span>`;
+    }).join('');
+    return `<div class="di-habit">
+      <div class="di-habit-q">${h.significant ? '⭐ ' : ''}${h.question}</div>
+      <div class="di-habit-n">${h.n_yes} yes-days vs ${h.n_no} no-days</div>
+      <div class="di-habit-deltas">${chips || '<span class="di-delta">no measurable shift</span>'}</div>
+    </div>`;
+  }).join('') || '<p class="di-how">No journal data found — add <b>journal_entries.csv</b> to unlock habit correlations.</p>';
+
+  // roadmap
+  const rm = d.roadmap;
+  if (rm) {
+    document.getElementById('di-roadmap-title').textContent = `Your 12-week roadmap — ${rm.title}`;
+    document.getElementById('di-roadmap').innerHTML = `
+      <p class="di-how">${rm.intro || ''}</p>
+      ${(rm.personalized_notes || []).map((n) => `<div class="di-note">${n}</div>`).join('')}
+      ${(rm.phases || []).map((p) => `
+        <div class="di-phase">
+          <span class="di-phase-weeks">${p.weeks}</span>
+          <div class="di-phase-title">${p.title}</div>
+          <div class="di-phase-focus">${p.focus}</div>
+          <ul>${(p.actions || []).map((a) => `<li>${a}</li>`).join('')}</ul>
+          <div class="di-phase-measure">📏 Measure: ${p.measure}</div>
+          <div class="di-phase-outcome">🎯 Expect: ${p.outcome}</div>
+        </div>`).join('')}
+      <p class="di-disclaimer">${rm.disclaimer || ''}</p>`;
+  }
+}
