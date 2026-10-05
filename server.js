@@ -16,7 +16,7 @@ const { populateDemoData } = require('./services/demoData');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' })); // Deep Insights posts CSVs as JSON text (route caps at 15 MB total)
 app.use(express.static(path.join(__dirname, 'public')));
 
 // -------------------------------------------------------------
@@ -711,6 +711,20 @@ app.post('/api/ai/coach/chat', async (req, res) => {
     console.error('Error in AI coach chat:', err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// JSON error handler: body-parser failures (e.g. 413 payload-too-large) must
+// come back as JSON, not Express's default HTML error page, so fetch callers
+// calling res.json() get a readable error instead of a SyntaxError.
+app.use((err, req, res, next) => {
+  if (!err) return next();
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({ error: 'Upload too large — the request body exceeds the 20 MB limit.' });
+  }
+  if (err.status && err.status < 500) {
+    return res.status(err.status).json({ error: err.message || 'Bad request' });
+  }
+  return next(err);
 });
 
 // Start Server
