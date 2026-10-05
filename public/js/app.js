@@ -3058,7 +3058,13 @@ async function runDeepInsightsAnalysis() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ files, goal: diGoal }),
     });
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(`Server returned a non-JSON response (HTTP ${res.status}). Please try again.`);
+    }
     if (!res.ok) throw new Error(data.error || 'Analysis failed');
     diSetStatus('');
     renderDeepInsights(data);
