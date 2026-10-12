@@ -1550,13 +1550,48 @@
             <!-- Mode A: Accelerometer Sensor Oscilloscope Viewport -->
             <div class="rep-viewport-container" id="viewport-motion">
               <div class="viewport-header">
-                <span class="viewport-title">📱 3-AXIS ACCELEROMETER SPECTRUM</span>
-                <span class="sensor-rate" id="sensor-hz-tag">50 Hz ACTIVE</span>
+                <span class="viewport-title">📱 3-AXIS PHONE ACCELEROMETER</span>
+                <span class="sensor-rate" id="sensor-hz-tag">INACTIVE</span>
               </div>
-              <canvas id="rep-sensor-canvas" width="460" height="230"></canvas>
+
+              <!-- Hardware Clarity Notice Card -->
+              <div class="hardware-clarity-card">
+                <div class="clarity-icon">ℹ️</div>
+                <div class="clarity-content">
+                  <div class="clarity-title">Sensor Source: Phone / Device Hardware (Not WHOOP Strap)</div>
+                  <div class="clarity-desc">
+                    This mode reads the <b>built-in accelerometer of your phone or tablet</b> (must be worn on an armband, in your pocket, or placed on your body).<br>
+                    <b>Why doesn't the WHOOP strap track reps directly?</b> WHOOP straps do <i>not</i> broadcast raw accelerometer data over Bluetooth (WHOOP restricts raw IMU data to its private mobile app to prevent battery drain).<br>
+                    👉 <b>Phone or laptop resting on a desk or floor?</b> Switch to <b style="color: #00F076;">📷 AI Camera Vision</b> above for automated hands-free tracking!
+                  </div>
+                </div>
+              </div>
+
+              <canvas id="rep-sensor-canvas" width="460" height="200"></canvas>
+
+              <!-- Real-time Live G-Force & Motion Gauge -->
+              <div class="live-motion-gauge-box">
+                <div class="gauge-header">
+                  <span class="gauge-lbl">LIVE FORCE:</span>
+                  <span class="gauge-val" id="motion-gforce-val">9.81 m/s² (1.00 G)</span>
+                  <span class="gauge-state" id="motion-state-badge">STATIONARY</span>
+                </div>
+                <div class="gauge-track">
+                  <div class="gauge-fill" id="motion-gauge-fill" style="width: 50%;"></div>
+                </div>
+                <div class="sensitivity-row">
+                  <span class="sens-lbl">SENSITIVITY:</span>
+                  <div class="sens-pills" role="radiogroup" aria-label="Sensor Sensitivity">
+                    <button type="button" class="sens-pill active" data-sens="high">High (Subtle)</button>
+                    <button type="button" class="sens-pill" data-sens="medium">Medium (Pocket)</button>
+                    <button type="button" class="sens-pill" data-sens="low">Low (Strict)</button>
+                  </div>
+                </div>
+              </div>
+
               <div class="sensor-instruction-bar" id="sensor-instruction-bar">
                 <span class="sens-tip-icon">💡</span>
-                <span id="sensor-instruction-text">Tap "Activate Motion Sensor" then place device in training position. Move through full range of motion.</span>
+                <span id="sensor-instruction-text">Tap "Start Motion Accelerometer" below then hold or attach your phone to your body during the exercise.</span>
               </div>
               <button type="button" id="btn-activate-motion" class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;">
                 <span>📲 Start Motion Accelerometer</span>
@@ -1566,7 +1601,7 @@
             <!-- Mode B: Computer Vision Camera Viewport -->
             <div class="rep-viewport-container hidden" id="viewport-vision">
               <div class="viewport-header">
-                <span class="viewport-title">📷 OPTICAL MOTION FLOW TRACKER</span>
+                <span class="viewport-title">📷 OPTICAL MOTION FLOW TRACKER (HANDS-FREE)</span>
                 <span class="camera-status" id="camera-status-tag">STANDBY</span>
               </div>
               <div class="camera-feed-box">
@@ -1601,6 +1636,17 @@
           <!-- Right Column: Giant Holographic Rep Counter Dial & Set Controls -->
           <div class="rep-counter-panel">
             <div class="rep-dial-card">
+              <!-- WHOOP Live Companion Pill -->
+              <div class="whoop-rep-companion" id="whoop-rep-companion">
+                <span class="companion-icon">⚡</span>
+                <span class="companion-label">WHOOP BLE:</span>
+                <span class="companion-val text-bpm" id="rep-whoop-bpm">-- BPM</span>
+                <span class="companion-divider">•</span>
+                <span class="companion-val text-cyan" id="rep-whoop-zone">Zone --</span>
+                <span class="companion-divider">•</span>
+                <span class="companion-val text-amber" id="rep-whoop-trimp">0.0 TRIMP</span>
+              </div>
+
               <!-- Animated Rep Ring Dial -->
               <div class="rep-dial-ring-wrap">
                 <svg class="rep-dial-svg" viewBox="0 0 200 200" width="190" height="190">

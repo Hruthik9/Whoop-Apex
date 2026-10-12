@@ -3683,6 +3683,9 @@ function onBleDisconnected() {
   const hwSubEl = document.getElementById('ble-hardware-sub');
   const badgeEl = document.getElementById('ble-diag-badge');
   const hrStatusEl = document.getElementById('diag-val-hr-status');
+  const repBpmEl = document.getElementById('rep-whoop-bpm');
+  const repZoneEl = document.getElementById('rep-whoop-zone');
+  const repTrimpEl = document.getElementById('rep-whoop-trimp');
 
   if (nameEl) nameEl.textContent = 'Disconnected';
   if (statusEl) statusEl.innerHTML = '<span class="ble-dot dot-off"></span> Offline / Idle';
@@ -3694,6 +3697,9 @@ function onBleDisconnected() {
   if (hwSubEl) hwSubEl.textContent = 'Model: -- • FW: --';
   if (badgeEl) badgeEl.textContent = '0 Services Bonded';
   if (hrStatusEl) hrStatusEl.textContent = 'Unchecked';
+  if (repBpmEl) repBpmEl.textContent = '-- BPM';
+  if (repZoneEl) repZoneEl.textContent = 'Zone --';
+  if (repTrimpEl) repTrimpEl.textContent = '0.0 TRIMP';
 
   logBlePacket('Device disconnected. Hardware telemetry offline.');
 
@@ -3803,6 +3809,11 @@ function processBleHeartRate(bpm, rrIntervals = []) {
   const kcalEl = document.getElementById('ble-session-kcal');
   const wfBpm = document.getElementById('waveform-bpm-tag');
 
+  // Rep Studio Companion elements
+  const repBpmEl = document.getElementById('rep-whoop-bpm');
+  const repZoneEl = document.getElementById('rep-whoop-zone');
+  const repTrimpEl = document.getElementById('rep-whoop-trimp');
+
   if (bpmEl) bpmEl.innerHTML = `${bpm} <span class="unit">BPM</span>`;
   if (zoneEl) zoneEl.textContent = `${zoneName} • ${Math.round(pctHrr)}% HRR`;
   if (rmssdEl) rmssdEl.innerHTML = `${bleState.liveRmssd || '--'} <span class="unit">ms</span>`;
@@ -3810,6 +3821,10 @@ function processBleHeartRate(bpm, rrIntervals = []) {
   if (trimpEl) trimpEl.innerHTML = `${bleState.trimpScore.toFixed(1)} <span class="unit">/ 100</span>`;
   if (kcalEl) kcalEl.textContent = `Est. ${Math.round(bleState.activeKcal)} active kcal`;
   if (wfBpm) wfBpm.textContent = `${bpm} BPM`;
+
+  if (repBpmEl) repBpmEl.textContent = `${bpm} BPM`;
+  if (repZoneEl) repZoneEl.textContent = `Zone ${zoneNum}`;
+  if (repTrimpEl) repTrimpEl.textContent = `${bleState.trimpScore.toFixed(1)} TRIMP`;
 
   // 4. Record sample if session is active
   if (bleState.recording) {
@@ -4227,7 +4242,11 @@ let repState = {
   totalSets: 0,
   totalVolumeKg: 0,
   audioCtx: null,
-  facingMode: 'user'
+  facingMode: 'user',
+  // Enhanced kinematic tracking
+  sensitivity: 'high', // 'high' | 'medium' | 'low'
+  inDescent: false,
+  stationaryCount: 0
 };
 
 function initRepCounterStudio() {
@@ -4248,6 +4267,17 @@ function initRepCounterStudio() {
       modePills.forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       setRepDetectionMode(pill.dataset.mode);
+    });
+  });
+
+  // Sensitivity Switcher
+  const sensPills = document.querySelectorAll('.sens-pill');
+  sensPills.forEach(sp => {
+    sp.addEventListener('click', () => {
+      sensPills.forEach(p => p.classList.remove('active'));
+      sp.classList.add('active');
+      repState.sensitivity = sp.dataset.sens || 'high';
+      logBlePacket(`Motion sensor sensitivity set to: ${repState.sensitivity.toUpperCase()}`);
     });
   });
 
@@ -4347,23 +4377,31 @@ function setRepDetectionMode(mode) {
 }
 
 // -------------------------------------------------------------
-// Mode A: Accelerometer Sensor Processing
+// Mode A: Accelerometer Sensor Processing (Phone / Device Hardware)
 // -------------------------------------------------------------
 async function toggleMotionSensor() {
   if (repState.sensorActive) {
     window.removeEventListener('devicemotion', handleDeviceMotion);
     repState.sensorActive = false;
     const btn = document.getElementById('btn-activate-motion');
+    const hzTag = document.getElementById('sensor-hz-tag');
     if (btn) btn.innerHTML = '<span>📲 Start Motion Accelerometer</span>';
+    if (hzTag) hzTag.textContent = 'INACTIVE';
+    return;
+  }
+
+  // Check if browser environment supports DeviceMotionEvent
+  if (typeof window.DeviceMotionEvent === 'undefined') {
+    alert('DeviceMotionEvent is not supported on this browser/device.\n\nDesktop computers do not have motion sensors. Please switch to "📷 AI Camera Vision" for automated tracking via your webcam, or "⚡ Tap Pacer"!');
     return;
   }
 
   // iOS 13+ permission request
-  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+  if (typeof DeviceMotionEvent.requestPermission === 'function') {
     try {
       const permission = await DeviceMotionEvent.requestPermission();
       if (permission !== 'granted') {
-        alert('Motion sensor permission was denied.');
+        alert('Motion sensor permission was denied. Please allow motion sensors in your browser settings.');
         return;
       }
     } catch (e) {
@@ -4374,7 +4412,10 @@ async function toggleMotionSensor() {
   window.addEventListener('devicemotion', handleDeviceMotion, { passive: true });
   repState.sensorActive = true;
   const btn = document.getElementById('btn-activate-motion');
+  const hzTag = document.getElementById('sensor-hz-tag');
   if (btn) btn.innerHTML = '<span>⏹ Stop Motion Sensor</span>';
+  if (hzTag) hzTag.textContent = 'STREAMING...';
+  logBlePacket('Phone motion accelerometer tracking activated.');
 }
 
 function handleDeviceMotion(event) {
@@ -4385,48 +4426,83 @@ function handleDeviceMotion(event) {
   const ay = acc.y || 0;
   const az = acc.z || 0;
   const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+  if (isNaN(mag) || mag <= 0) return;
 
   // Exponential moving average filter
-  repState.smoothedMagnitude = 0.3 * mag + 0.7 * repState.smoothedMagnitude;
+  repState.smoothedMagnitude = 0.35 * mag + 0.65 * repState.smoothedMagnitude;
   const currentVal = repState.smoothedMagnitude;
 
   // Append to oscilloscope history
   repState.sensorHistory.push(currentVal);
   if (repState.sensorHistory.length > 200) repState.sensorHistory.shift();
 
-  const cfg = EXERCISES_CONFIG[repState.currentExKey] || EXERCISES_CONFIG.pushups;
-  const now = Date.now();
+  // Update real-time Live Force UI & gauge
+  const gForceVal = document.getElementById('motion-gforce-val');
+  const gForceBadge = document.getElementById('motion-state-badge');
+  const gForceFill = document.getElementById('motion-gauge-fill');
+  const hzTag = document.getElementById('sensor-hz-tag');
+  if (hzTag && hzTag.textContent !== '60 Hz STREAM') hzTag.textContent = '60 Hz STREAM';
 
-  // State Machine for Rep Detection
-  // READY -> ECCENTRIC (drop below valley) -> INFLECTION -> CONCENTRIC (spike above peak) -> REP_RECORDED
-  if (repState.phase === 'ready' || repState.phase === 'concentric') {
-    if (currentVal < cfg.valleyThreshold) {
-      repState.phase = 'eccentric';
+  if (gForceVal) {
+    const gNum = (mag / 9.81).toFixed(2);
+    gForceVal.textContent = `${mag.toFixed(1)} m/s² (${gNum} G)`;
+  }
+  if (gForceFill) {
+    // Gauge from 0 to 20 m/s2, mid = 9.8
+    const pct = Math.min(100, Math.max(0, (mag / 20) * 100));
+    gForceFill.style.width = `${pct}%`;
+  }
+
+  const delta = currentVal - 9.81;
+  const now = Date.now();
+  const cfg = EXERCISES_CONFIG[repState.currentExKey] || EXERCISES_CONFIG.pushups;
+
+  // Dynamic sensitivity thresholds
+  let valleyThreshold = 1.0;
+  let peakThreshold = 1.2;
+  if (repState.sensitivity === 'medium') {
+    valleyThreshold = 1.8;
+    peakThreshold = 2.0;
+  } else if (repState.sensitivity === 'low') {
+    valleyThreshold = 2.8;
+    peakThreshold = 3.2;
+  }
+
+  // Detect stationary vs active
+  if (Math.abs(delta) < 0.25) {
+    repState.stationaryCount = (repState.stationaryCount || 0) + 1;
+    if (repState.stationaryCount > 80 && gForceBadge) {
+      gForceBadge.textContent = 'RESTING / STATIONARY';
+      gForceBadge.style.color = '#9CA3AF';
+    }
+  } else {
+    repState.stationaryCount = 0;
+    if (gForceBadge) {
+      gForceBadge.textContent = 'ACTIVE MOTION';
+      gForceBadge.style.color = '#00F076';
+    }
+  }
+
+  // 2-Phase Adaptive Peak/Valley State Machine
+  // Phase 1: User descends (eccentric drop below gravity threshold)
+  if (!repState.inDescent) {
+    if (delta < -valleyThreshold) {
+      repState.inDescent = true;
       repState.phaseStartTime = now;
       updatePhaseBadge('DOWN (ECCENTRIC)', 'badge-eccentric');
     }
-  } else if (repState.phase === 'eccentric') {
-    if (currentVal < cfg.valleyThreshold - 1.0) {
-      repState.phase = 'inflection';
-      updatePhaseBadge('BOTTOM REACHED', 'badge-inflection');
-    }
-  } else if (repState.phase === 'inflection') {
-    if (currentVal > cfg.peakThreshold) {
-      repState.phase = 'concentric';
-      updatePhaseBadge('UP (CONCENTRIC)', 'badge-concentric');
-
-      // Check min duration lockout to avoid duplicate counts
+  } else {
+    // Phase 2: User ascends (concentric push/pull above peak threshold)
+    if (delta > peakThreshold) {
       const elapsed = now - repState.lastRepTime;
-      if (elapsed >= cfg.minDurationMs) {
+      const minLockout = Math.min(cfg.minDurationMs || 600, 600);
+      if (elapsed >= minLockout) {
         repState.lastRepTime = now;
-        const repDuration = (now - repState.phaseStartTime) / 1000;
+        repState.inDescent = false;
+        updatePhaseBadge('UP (CONCENTRIC)', 'badge-concentric');
+        const repDuration = Math.max(0.7, (now - repState.phaseStartTime) / 1000);
         onRepRecorded(repDuration);
       }
-    }
-  } else if (repState.phase === 'concentric') {
-    if (Math.abs(currentVal - 9.8) < 1.5) {
-      repState.phase = 'ready';
-      updatePhaseBadge('READY', 'badge-ready');
     }
   }
 }
