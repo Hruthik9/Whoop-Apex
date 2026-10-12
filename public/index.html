@@ -1326,7 +1326,35 @@
           Pairs directly with your <b>WHOOP 4.0 / 5.0 strap</b> (via Heart Rate Service <code class="code-pill">0x180D</code> & Battery <code class="code-pill">0x180F</code>), <b>Polar H10/Verity Sense</b>, or any standard Bluetooth heart-rate monitor. Works <b>100% offline</b> right in the browser with zero cloud or account required.
         </p>
 
-        <!-- BLE Telemetry Grid -->
+        <!-- WHOOP Heart Rate Broadcast Guide Banner (Auto-shown when strap connected but HR Broadcast is OFF) -->
+        <div class="whoop-hr-broadcast-banner" id="whoop-hr-broadcast-banner" style="display: none;">
+          <div class="broadcast-banner-glow"></div>
+          <div class="broadcast-banner-icon">📡</div>
+          <div class="broadcast-banner-body">
+            <div class="broadcast-banner-title">
+              <span>WHOOP Heart Rate Broadcast is OFF</span>
+              <span class="broadcast-tag">SETUP REQUIRED</span>
+            </div>
+            <p class="broadcast-banner-desc">
+              Your WHOOP strap is successfully connected over Bluetooth! By default, WHOOP only shares <b>Battery Level</b>. To unlock <b>Live Heart Rate, R-R intervals, Real-Time HRV, and ECG Oscilloscope</b>:
+            </p>
+            <ol class="broadcast-steps">
+              <li>Open the <b>WHOOP app</b> on your mobile phone.</li>
+              <li>Tap your <b>Strap icon / Device Settings</b> (in the bottom navigation or More menu).</li>
+              <li>Toggle <b>Heart Rate Broadcast</b> to <span class="badge-on">ON</span>.</li>
+            </ol>
+            <div class="broadcast-banner-actions">
+              <button type="button" class="btn btn-primary btn-xs" id="btn-recheck-hr">
+                <span class="spin-icon">🔄</span>
+                <span>Activate Heart Rate Stream Now</span>
+              </button>
+              <button type="button" class="btn btn-ghost btn-xs" id="btn-dismiss-broadcast-banner">Dismiss</button>
+              <span class="broadcast-auto-hint">Auto-polling strap every 3s...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BLE Telemetry Grid (6 Tiles) -->
         <div class="ble-stat-grid">
           <div class="ble-stat-tile">
             <div class="ble-stat-label">DEVICE STATUS</div>
@@ -1352,6 +1380,11 @@
             <div class="ble-stat-label">EFFORT / TRIMP</div>
             <div class="ble-stat-value text-amber" id="ble-live-trimp">0.0 <span class="unit">/ 100</span></div>
             <div class="ble-stat-sub" id="ble-session-kcal">Est. 0 active kcal</div>
+          </div>
+          <div class="ble-stat-tile">
+            <div class="ble-stat-label">HARDWARE & CONTACT</div>
+            <div class="ble-stat-value text-cyan" id="ble-contact-val">--</div>
+            <div class="ble-stat-sub" id="ble-hardware-sub">Model: -- • FW: --</div>
           </div>
         </div>
 
@@ -1384,6 +1417,40 @@
             <button type="button" id="btn-ble-export-json" class="btn btn-secondary btn-xs" disabled title="Export current recording as JSON">
               <span>💾 Export JSON</span>
             </button>
+          </div>
+        </div>
+
+        <!-- WHOOP & BLE Hardware Inspector / GATT Diagnostics Drawer -->
+        <div class="ble-diagnostics-drawer" id="ble-diagnostics-drawer">
+          <div class="drawer-header" id="btn-toggle-diagnostics" role="button" tabindex="0">
+            <div class="drawer-title-group">
+              <span class="drawer-icon">🔍</span>
+              <span class="drawer-title">WHOOP & BLE Hardware Inspector (GATT Explorer)</span>
+              <span class="drawer-badge" id="ble-diag-badge">0 Services Bonded</span>
+            </div>
+            <span class="drawer-arrow" id="diag-arrow">▼</span>
+          </div>
+          <div class="drawer-body" id="diag-drawer-body" style="display: none;">
+            <div class="diag-meta-grid">
+              <div class="diag-meta-item"><span class="lbl">Manufacturer:</span> <span class="val" id="diag-val-manufacturer">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">Model / Hardware:</span> <span class="val" id="diag-val-model">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">Firmware Version:</span> <span class="val" id="diag-val-firmware">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">Hardware Revision:</span> <span class="val" id="diag-val-hardware">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">Serial Number:</span> <span class="val" id="diag-val-serial">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">Skin Contact State:</span> <span class="val" id="diag-val-contact">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">Sensor Location:</span> <span class="val" id="diag-val-location">--</span></div>
+              <div class="diag-meta-item"><span class="lbl">HR Broadcast Service:</span> <span class="val" id="diag-val-hr-status">Unchecked</span></div>
+            </div>
+            <div class="diag-services-list" id="diag-services-list">
+              <!-- Dynamically populated GATT services -->
+            </div>
+            <div class="diag-packet-feed-wrap">
+              <div class="feed-header">
+                <span>LIVE GATT PACKET FEED</span>
+                <button type="button" class="btn-clear-feed" id="btn-clear-diag-feed">Clear Feed</button>
+              </div>
+              <div class="feed-console" id="ble-packet-console">Ready. Connect your WHOOP or click 'Test Simulator' to stream events.</div>
+            </div>
           </div>
         </div>
       </section>

@@ -3163,6 +3163,16 @@ function renderDeepInsights(d) {
 // ===========================================================================
 // BLUETOOTH LOW ENERGY (BLE) OFFLINE HARDWARE ENGINE
 // ===========================================================================
+// MODULE 10: WEB BLE HARDWARE TELEMETRY & REVOLUTIONARY REP STUDIO
+// ===========================================================================
+
+const WHOOP_GATT_SERVICES = [
+  'heart_rate',
+  'battery_service',
+  'device_information',
+  '61080001-8d6d-82b8-614a-1c8cb0f8dcc6',
+  '61080000-8d6d-82b8-614a-1c8cb0f8dcc6'
+];
 
 let bleState = {
   device: null,
@@ -3184,6 +3194,17 @@ let bleState = {
   recordTimer: null,
   ecgAnimId: null,
   ecgPhase: 0,
+  // WHOOP Hardware & GATT diagnostics
+  deviceManufacturer: '',
+  deviceModel: '',
+  deviceFirmware: '',
+  deviceHardware: '',
+  deviceSerial: '',
+  sensorLocation: '',
+  sensorContact: null,
+  hrProbeTimer: null,
+  discoveredServices: [],
+  packetLogs: []
 };
 
 function initBleManager() {
@@ -3192,14 +3213,61 @@ function initBleManager() {
   const btnRecord = document.getElementById('btn-ble-record');
   const btnExportCsv = document.getElementById('btn-ble-export-csv');
   const btnExportJson = document.getElementById('btn-ble-export-json');
+  const btnRecheckHr = document.getElementById('btn-recheck-hr');
+  const btnDismissBanner = document.getElementById('btn-dismiss-broadcast-banner');
+  const btnToggleDiag = document.getElementById('btn-toggle-diagnostics');
+  const btnClearFeed = document.getElementById('btn-clear-diag-feed');
 
   if (btnConnect) btnConnect.addEventListener('click', toggleBleConnection);
   if (btnSimulate) btnSimulate.addEventListener('click', toggleBleSimulation);
   if (btnRecord) btnRecord.addEventListener('click', toggleBleRecording);
   if (btnExportCsv) btnExportCsv.addEventListener('click', exportBleRecordingCsv);
   if (btnExportJson) btnExportJson.addEventListener('click', exportBleRecordingJson);
+  if (btnRecheckHr) btnRecheckHr.addEventListener('click', () => probeForHeartRateService(true));
+  if (btnDismissBanner) btnDismissBanner.addEventListener('click', hideWhoopBroadcastBanner);
+  if (btnToggleDiag) btnToggleDiag.addEventListener('click', toggleDiagnosticsDrawer);
+  if (btnClearFeed) btnClearFeed.addEventListener('click', clearBlePacketConsole);
 
   initEcgCanvas();
+}
+
+function logBlePacket(msg) {
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+  const logLine = `[${timeStr}] ${msg}`;
+  bleState.packetLogs.push(logLine);
+  if (bleState.packetLogs.length > 100) bleState.packetLogs.shift();
+
+  const consoleEl = document.getElementById('ble-packet-console');
+  if (consoleEl) {
+    consoleEl.textContent = bleState.packetLogs.slice(-25).join('\n');
+    consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+}
+
+function clearBlePacketConsole() {
+  bleState.packetLogs = [];
+  const consoleEl = document.getElementById('ble-packet-console');
+  if (consoleEl) consoleEl.textContent = 'Log cleared. Waiting for GATT events...';
+}
+
+function toggleDiagnosticsDrawer() {
+  const body = document.getElementById('diag-drawer-body');
+  const arrow = document.getElementById('diag-arrow');
+  if (!body) return;
+  const isHidden = body.style.display === 'none' || !body.style.display;
+  body.style.display = isHidden ? 'block' : 'none';
+  if (arrow) arrow.classList.toggle('open', isHidden);
+}
+
+function showWhoopBroadcastBanner() {
+  const banner = document.getElementById('whoop-hr-broadcast-banner');
+  if (banner) banner.style.display = 'flex';
+}
+
+function hideWhoopBroadcastBanner() {
+  const banner = document.getElementById('whoop-hr-broadcast-banner');
+  if (banner) banner.style.display = 'none';
 }
 
 async function toggleBleConnection() {
@@ -3217,62 +3285,368 @@ async function toggleBleConnection() {
 
   try {
     let device;
+    logBlePacket('Initiating Web Bluetooth scan with WHOOP & Heart Rate filters...');
     try {
       device = await navigator.bluetooth.requestDevice({
         filters: [
           { services: ['heart_rate'] },
           { namePrefix: 'WHOOP' },
+          { namePrefix: 'Whoop' },
+          { namePrefix: 'whoop' },
           { namePrefix: 'Polar' }
         ],
-        optionalServices: ['battery_service', 'device_information']
+        optionalServices: WHOOP_GATT_SERVICES
       });
     } catch (filterErr) {
-      // Fallback: accept all Bluetooth devices with heart rate service
+      logBlePacket(`Filtered scan bypassed (${filterErr.message}). Opening standard device picker...`);
+      // Fallback: accept all Bluetooth devices and grant access to all WHOOP GATT profiles
       device = await navigator.bluetooth.requestDevice({
         acceptAllDevices: true,
-        optionalServices: ['heart_rate', 'battery_service', 'device_information']
+        optionalServices: WHOOP_GATT_SERVICES
       });
     }
 
-    if (!device) return;
+    if (!device) {
+      if (btnLabel) btnLabel.textContent = 'Pair BLE Strap';
+      return;
+    }
+
     bleState.device = device;
     device.addEventListener('gattserverdisconnected', onBleDisconnected);
 
     if (btnLabel) btnLabel.textContent = 'Connecting...';
+    logBlePacket(`Pairing with device: ${device.name || 'Unnamed Peripheral'} (ID: ${device.id.slice(0, 8)}...)`);
     const server = await device.gatt.connect();
     bleState.server = server;
+    logBlePacket('GATT server connected successfully.');
 
-    // 1. Connect to Heart Rate Service (0x180D)
-    try {
-      const hrService = await server.getPrimaryService('heart_rate');
-      const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
-      bleState.hrChar = hrChar;
-      await hrChar.startNotifications();
-      hrChar.addEventListener('characteristicvaluechanged', onBleHeartRateMeasurement);
-    } catch (e) {
-      console.warn('Heart rate service connection warning:', e);
-    }
+    // 1. Inspect & Enumerate Discovered Primary Services
+    await discoverAllGattServices(server);
 
-    // 2. Connect to Battery Service (0x180F) if present
-    try {
-      const batteryService = await server.getPrimaryService('battery_service');
-      const batteryChar = await batteryService.getCharacteristic('battery_level');
-      bleState.batteryChar = batteryChar;
-      const initialBattery = await batteryChar.readValue();
-      updateBleBattery(initialBattery.getUint8(0));
-      await batteryChar.startNotifications();
-      batteryChar.addEventListener('characteristicvaluechanged', (evt) => {
-        updateBleBattery(evt.target.value.getUint8(0));
-      });
-    } catch (e) {
-      console.warn('Battery service not available on device:', e);
-    }
+    // 2. Read Device Information Service (0x180A)
+    await connectDeviceInformationService(server);
+
+    // 3. Connect Battery Service (0x180F)
+    await connectBatteryService(server);
+
+    // 4. Connect Heart Rate Service (0x180D)
+    await connectHeartRateService(server);
+
+    // 5. Inspect Proprietary WHOOP Services (61080001-... / 61080000-...)
+    await inspectProprietaryWhoopService(server);
 
     bleState.connected = true;
-    updateBleUiConnected(device.name || 'WHOOP / BLE Strap');
+    updateBleUiConnected(device.name || bleState.deviceModel || 'WHOOP Strap');
+    updateBleHardwareDisplay();
   } catch (err) {
     console.error('BLE connection error:', err);
+    logBlePacket(`Connection error: ${err.message}`);
     if (btnLabel) btnLabel.textContent = 'Pair BLE Strap';
+  }
+}
+
+async function discoverAllGattServices(server) {
+  bleState.discoveredServices = [];
+  try {
+    if (server.getPrimaryServices) {
+      const services = await server.getPrimaryServices();
+      const listEl = document.getElementById('diag-services-list');
+      const badgeEl = document.getElementById('ble-diag-badge');
+      if (badgeEl) badgeEl.textContent = `${services.length} Services Bonded`;
+
+      if (listEl) {
+        listEl.innerHTML = '';
+        for (const s of services) {
+          const shortUuid = formatGattUuid(s.uuid);
+          const serviceName = getGattServiceName(s.uuid);
+          bleState.discoveredServices.push({ uuid: s.uuid, name: serviceName });
+
+          const itemEl = document.createElement('div');
+          itemEl.className = 'diag-service-item';
+          itemEl.innerHTML = `
+            <div class="diag-service-header">
+              <span>${serviceName}</span>
+              <span class="diag-service-uuid">${shortUuid}</span>
+            </div>
+            <div class="diag-chars-wrap" id="chars-${shortUuid.replace(/[^a-zA-Z0-9]/g, '')}">
+              <span style="font-size: 10px; color: var(--text-secondary);">Querying characteristics...</span>
+            </div>
+          `;
+          listEl.appendChild(itemEl);
+
+          // Populate characteristics asynchronously
+          try {
+            const chars = await s.getCharacteristics();
+            const charContainer = document.getElementById(`chars-${shortUuid.replace(/[^a-zA-Z0-9]/g, '')}`);
+            if (charContainer) {
+              charContainer.innerHTML = '';
+              chars.forEach(c => {
+                const pill = document.createElement('span');
+                pill.className = 'diag-char-pill';
+                const props = [];
+                if (c.properties.read) props.push('R');
+                if (c.properties.write) props.push('W');
+                if (c.properties.notify) props.push('N');
+                pill.textContent = `${formatGattUuid(c.uuid)} [${props.join('')}]`;
+                charContainer.appendChild(pill);
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    }
+  } catch (e) {
+    logBlePacket(`Services enumeration notice: ${e.message}`);
+  }
+}
+
+function formatGattUuid(uuid) {
+  if (uuid.startsWith('0000') && uuid.endsWith('-0000-1000-8000-00805f9b34fb')) {
+    return '0x' + uuid.slice(4, 8).toUpperCase();
+  }
+  return uuid.slice(0, 8).toUpperCase() + '...';
+}
+
+function getGattServiceName(uuid) {
+  const clean = uuid.toLowerCase();
+  if (clean.includes('180d')) return 'Heart Rate Service (0x180D)';
+  if (clean.includes('180f')) return 'Battery Service (0x180F)';
+  if (clean.includes('180a')) return 'Device Information (0x180A)';
+  if (clean.includes('61080001') || clean.includes('61080000')) return 'WHOOP Proprietary Service';
+  return 'GATT Service (' + formatGattUuid(uuid) + ')';
+}
+
+async function connectDeviceInformationService(server) {
+  try {
+    const devInfo = await server.getPrimaryService('device_information');
+    const dec = new TextDecoder('utf-8');
+
+    // Manufacturer
+    try {
+      const char = await devInfo.getCharacteristic('manufacturer_name_string');
+      const val = await char.readValue();
+      bleState.deviceManufacturer = dec.decode(val).trim();
+    } catch (_) {}
+
+    // Model
+    try {
+      const char = await devInfo.getCharacteristic('model_number_string');
+      const val = await char.readValue();
+      bleState.deviceModel = dec.decode(val).trim();
+    } catch (_) {}
+
+    // Firmware
+    try {
+      const char = await devInfo.getCharacteristic('firmware_revision_string');
+      const val = await char.readValue();
+      bleState.deviceFirmware = dec.decode(val).trim();
+    } catch (_) {}
+
+    // Hardware
+    try {
+      const char = await devInfo.getCharacteristic('hardware_revision_string');
+      const val = await char.readValue();
+      bleState.deviceHardware = dec.decode(val).trim();
+    } catch (_) {}
+
+    // Serial
+    try {
+      const char = await devInfo.getCharacteristic('serial_number_string');
+      const val = await char.readValue();
+      bleState.deviceSerial = dec.decode(val).trim();
+    } catch (_) {}
+
+    logBlePacket(`Device Info read: ${bleState.deviceManufacturer || 'WHOOP'} ${bleState.deviceModel || 'Strap'} (FW: ${bleState.deviceFirmware || 'N/A'})`);
+  } catch (e) {
+    logBlePacket(`Device Information service notice: ${e.message}`);
+  }
+}
+
+async function connectBatteryService(server) {
+  try {
+    const batteryService = await server.getPrimaryService('battery_service');
+    const batteryChar = await batteryService.getCharacteristic('battery_level');
+    bleState.batteryChar = batteryChar;
+    const initialBattery = await batteryChar.readValue();
+    const pct = initialBattery.getUint8(0);
+    updateBleBattery(pct);
+    logBlePacket(`Connected to Battery Service (0x180F): ${pct}% charge`);
+    await batteryChar.startNotifications();
+    batteryChar.addEventListener('characteristicvaluechanged', (evt) => {
+      const val = evt.target.value.getUint8(0);
+      updateBleBattery(val);
+      logBlePacket(`Strap battery update: ${val}%`);
+    });
+  } catch (e) {
+    logBlePacket(`Battery service warning: ${e.message}`);
+  }
+}
+
+async function connectHeartRateService(server) {
+  try {
+    const hrService = await server.getPrimaryService('heart_rate');
+    const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
+    bleState.hrChar = hrChar;
+    await hrChar.startNotifications();
+    hrChar.addEventListener('characteristicvaluechanged', onBleHeartRateMeasurement);
+    logBlePacket('Connected to Heart Rate Service (0x180D). Subscribed to live 0x2A37 stream.');
+
+    // Query Body Sensor Location (0x2A38)
+    try {
+      const locChar = await hrService.getCharacteristic('body_sensor_location');
+      const locVal = await locChar.readValue();
+      const locCode = locVal.getUint8(0);
+      const locNames = ['Other', 'Chest', 'Wrist', 'Finger', 'Hand', 'Ear Lobe', 'Foot'];
+      bleState.sensorLocation = locNames[locCode] || `Code ${locCode}`;
+      logBlePacket(`Body sensor location: ${bleState.sensorLocation}`);
+    } catch (_) {}
+
+    const hrStatusEl = document.getElementById('diag-val-hr-status');
+    if (hrStatusEl) hrStatusEl.textContent = 'Active (0x180D Streaming)';
+
+    hideWhoopBroadcastBanner();
+    stopHrServiceProbe();
+  } catch (e) {
+    logBlePacket(`Heart rate service (0x180D) not detected: ${e.message}`);
+    const hrStatusEl = document.getElementById('diag-val-hr-status');
+    if (hrStatusEl) hrStatusEl.textContent = 'Inactive (HR Broadcast OFF)';
+
+    // Show the WHOOP Heart Rate Broadcast Setup Guide!
+    showWhoopBroadcastBanner();
+    startHrServiceProbe();
+  }
+}
+
+async function inspectProprietaryWhoopService(server) {
+  try {
+    let whoopService;
+    try {
+      whoopService = await server.getPrimaryService('61080001-8d6d-82b8-614a-1c8cb0f8dcc6');
+    } catch (_) {
+      try {
+        whoopService = await server.getPrimaryService('61080000-8d6d-82b8-614a-1c8cb0f8dcc6');
+      } catch (_) {}
+    }
+
+    if (whoopService) {
+      logBlePacket(`Detected WHOOP Proprietary Service: ${formatGattUuid(whoopService.uuid)}`);
+      try {
+        const chars = await whoopService.getCharacteristics();
+        logBlePacket(`WHOOP Proprietary Characteristics: ${chars.map(c => formatGattUuid(c.uuid)).join(', ')}`);
+        
+        // Listen to events characteristic (61080004) if supported
+        for (const c of chars) {
+          if (c.properties.notify) {
+            try {
+              await c.startNotifications();
+              c.addEventListener('characteristicvaluechanged', (evt) => {
+                const len = evt.target.value.byteLength;
+                logBlePacket(`WHOOP Proprietary Packet on ${formatGattUuid(c.uuid)} (${len} bytes)`);
+              });
+              logBlePacket(`Subscribed to WHOOP notifications on ${formatGattUuid(c.uuid)}`);
+            } catch (_) {}
+          }
+        }
+      } catch (err) {
+        logBlePacket(`Proprietary chars inspection notice: ${err.message}`);
+      }
+    }
+  } catch (_) {}
+}
+
+function startHrServiceProbe() {
+  if (bleState.hrProbeTimer) return;
+  bleState.hrProbeTimer = setInterval(async () => {
+    if (!bleState.server || !bleState.server.connected || bleState.hrChar) {
+      stopHrServiceProbe();
+      return;
+    }
+    await probeForHeartRateService(false);
+  }, 3000);
+}
+
+function stopHrServiceProbe() {
+  if (bleState.hrProbeTimer) {
+    clearInterval(bleState.hrProbeTimer);
+    bleState.hrProbeTimer = null;
+  }
+}
+
+async function probeForHeartRateService(showFeedback = false) {
+  if (!bleState.server || !bleState.server.connected) {
+    if (showFeedback) alert('No Bluetooth device is currently connected. Please pair your WHOOP first.');
+    return;
+  }
+  if (bleState.hrChar) {
+    hideWhoopBroadcastBanner();
+    stopHrServiceProbe();
+    return;
+  }
+
+  logBlePacket('Probing strap for Heart Rate Service (0x180D)...');
+  try {
+    const hrService = await bleState.server.getPrimaryService('heart_rate');
+    const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
+    bleState.hrChar = hrChar;
+    await hrChar.startNotifications();
+    hrChar.addEventListener('characteristicvaluechanged', onBleHeartRateMeasurement);
+    logBlePacket('🎉 WHOOP Heart Rate Broadcast detected! Live heart rate stream activated.');
+
+    const hrStatusEl = document.getElementById('diag-val-hr-status');
+    if (hrStatusEl) hrStatusEl.textContent = 'Active (0x180D Streaming)';
+
+    hideWhoopBroadcastBanner();
+    stopHrServiceProbe();
+    if (showFeedback) {
+      alert('Heart Rate Stream successfully activated! Your live BPM, HRV, and ECG are now streaming.');
+    }
+  } catch (err) {
+    if (showFeedback) {
+      alert('Heart Rate Service is still not broadcasting.\n\nPlease check your WHOOP mobile app:\n1. Open WHOOP App\n2. Device Settings > Heart Rate Broadcast\n3. Ensure toggle is turned ON\n\nOnce toggled, our live engine will auto-connect in ~3 seconds!');
+    }
+  }
+}
+
+function updateBleHardwareDisplay() {
+  const contactEl = document.getElementById('ble-contact-val');
+  const hwSubEl = document.getElementById('ble-hardware-sub');
+
+  const diagMfg = document.getElementById('diag-val-manufacturer');
+  const diagMdl = document.getElementById('diag-val-model');
+  const diagFw = document.getElementById('diag-val-firmware');
+  const diagHw = document.getElementById('diag-val-hardware');
+  const diagSn = document.getElementById('diag-val-serial');
+  const diagContact = document.getElementById('diag-val-contact');
+  const diagLoc = document.getElementById('diag-val-location');
+
+  if (diagMfg) diagMfg.textContent = bleState.deviceManufacturer || 'WHOOP, Inc.';
+  if (diagMdl) diagMdl.textContent = bleState.deviceModel || (bleState.device ? bleState.device.name : '--');
+  if (diagFw) diagFw.textContent = bleState.deviceFirmware || '--';
+  if (diagHw) diagHw.textContent = bleState.deviceHardware || '--';
+  if (diagSn) diagSn.textContent = bleState.deviceSerial || '--';
+  if (diagLoc) diagLoc.textContent = bleState.sensorLocation || 'Wrist (Default)';
+
+  // Contact status
+  let contactText = '--';
+  if (bleState.sensorContact === true) {
+    contactText = 'Worn (On Skin)';
+    if (contactEl) {
+      contactEl.textContent = 'Worn (Skin OK)';
+      contactEl.className = 'ble-stat-value text-green';
+    }
+  } else if (bleState.sensorContact === false) {
+    contactText = 'Off Skin / Loose';
+    if (contactEl) {
+      contactEl.textContent = 'Off Skin / Loose';
+      contactEl.className = 'ble-stat-value text-amber';
+    }
+  } else {
+    if (contactEl) contactEl.textContent = bleState.deviceModel || 'WHOOP Strap';
+  }
+  if (diagContact) diagContact.textContent = contactText;
+
+  if (hwSubEl) {
+    hwSubEl.textContent = `${bleState.deviceModel || 'WHOOP 4.0'} • FW: ${bleState.deviceFirmware || 'Latest'}`;
   }
 }
 
@@ -3288,12 +3662,16 @@ function disconnectBleDevice() {
 }
 
 function onBleDisconnected() {
+  stopHrServiceProbe();
+  hideWhoopBroadcastBanner();
+
   bleState.connected = false;
   bleState.device = null;
   bleState.server = null;
   bleState.hrChar = null;
   bleState.batteryChar = null;
   bleState.liveBpm = 0;
+  bleState.sensorContact = null;
 
   const nameEl = document.getElementById('ble-device-name');
   const statusEl = document.getElementById('ble-connection-status');
@@ -3301,6 +3679,10 @@ function onBleDisconnected() {
   const btnLabel = document.getElementById('btn-ble-connect-label');
   const btnIcon = document.getElementById('btn-ble-connect-icon');
   const wfBpm = document.getElementById('waveform-bpm-tag');
+  const contactEl = document.getElementById('ble-contact-val');
+  const hwSubEl = document.getElementById('ble-hardware-sub');
+  const badgeEl = document.getElementById('ble-diag-badge');
+  const hrStatusEl = document.getElementById('diag-val-hr-status');
 
   if (nameEl) nameEl.textContent = 'Disconnected';
   if (statusEl) statusEl.innerHTML = '<span class="ble-dot dot-off"></span> Offline / Idle';
@@ -3308,6 +3690,12 @@ function onBleDisconnected() {
   if (btnLabel) btnLabel.textContent = 'Pair BLE Strap';
   if (btnIcon) btnIcon.textContent = '⚡';
   if (wfBpm) wfBpm.textContent = '0 BPM';
+  if (contactEl) contactEl.textContent = '--';
+  if (hwSubEl) hwSubEl.textContent = 'Model: -- • FW: --';
+  if (badgeEl) badgeEl.textContent = '0 Services Bonded';
+  if (hrStatusEl) hrStatusEl.textContent = 'Unchecked';
+
+  logBlePacket('Device disconnected. Hardware telemetry offline.');
 
   if (bleState.recording) toggleBleRecording();
 }
@@ -3330,6 +3718,15 @@ function onBleHeartRateMeasurement(event) {
   const rate16Bits = (flags & 0x1) !== 0;
   let offset = 1;
   let bpm = 0;
+
+  // Sensor Contact Status: bits 1 & 2
+  // bit 2 is sensor contact supported (0x4), bit 1 is contact detected (0x2)
+  const contactSupported = (flags & 0x04) !== 0;
+  if (contactSupported) {
+    const contactDetected = (flags & 0x02) !== 0;
+    bleState.sensorContact = contactDetected;
+    updateBleHardwareDisplay();
+  }
 
   if (rate16Bits) {
     bpm = dataView.getUint16(offset, /*littleEndian=*/true);
@@ -3448,12 +3845,51 @@ function startBleSimulation() {
   if (bleState.connected) disconnectBleDevice();
   bleState.simulating = true;
   bleState.liveBpm = 72;
-  updateBleUiConnected('Virtual WHOOP 5.0 (Simulator)');
+  bleState.deviceManufacturer = 'WHOOP, Inc.';
+  bleState.deviceModel = 'WHOOP 4.0 (Virtual)';
+  bleState.deviceFirmware = '4.1.2.0-sim';
+  bleState.deviceHardware = 'HW-v4.0.B';
+  bleState.deviceSerial = 'WP-SIM-99214';
+  bleState.sensorLocation = 'Wrist';
+  bleState.sensorContact = true;
+
+  updateBleUiConnected('Virtual WHOOP 4.0 (Simulator)');
+  updateBleHardwareDisplay();
 
   const statusEl = document.getElementById('ble-connection-status');
   if (statusEl) statusEl.innerHTML = '<span class="ble-dot dot-sim"></span> Virtual Test Bench Active';
   const btnSimLabel = document.getElementById('btn-ble-sim-label');
   if (btnSimLabel) btnSimLabel.textContent = '⏹ Stop Simulator';
+
+  const badgeEl = document.getElementById('ble-diag-badge');
+  if (badgeEl) badgeEl.textContent = '4 Services Bonded';
+  const hrStatusEl = document.getElementById('diag-val-hr-status');
+  if (hrStatusEl) hrStatusEl.textContent = 'Active (Simulated 0x180D)';
+
+  const listEl = document.getElementById('diag-services-list');
+  if (listEl) {
+    listEl.innerHTML = `
+      <div class="diag-service-item">
+        <div class="diag-service-header"><span>Heart Rate Service (0x180D)</span><span class="diag-service-uuid">0x180D</span></div>
+        <div class="diag-chars-wrap"><span class="diag-char-pill">0x2A37 [N]</span><span class="diag-char-pill">0x2A38 [R]</span></div>
+      </div>
+      <div class="diag-service-item">
+        <div class="diag-service-header"><span>Battery Service (0x180F)</span><span class="diag-service-uuid">0x180F</span></div>
+        <div class="diag-chars-wrap"><span class="diag-char-pill">0x2A19 [RN]</span></div>
+      </div>
+      <div class="diag-service-item">
+        <div class="diag-service-header"><span>Device Information (0x180A)</span><span class="diag-service-uuid">0x180A</span></div>
+        <div class="diag-chars-wrap"><span class="diag-char-pill">0x2A29 [R]</span><span class="diag-char-pill">0x2A24 [R]</span><span class="diag-char-pill">0x2A26 [R]</span></div>
+      </div>
+      <div class="diag-service-item">
+        <div class="diag-service-header"><span>WHOOP Proprietary Service</span><span class="diag-service-uuid">61080001...</span></div>
+        <div class="diag-chars-wrap"><span class="diag-char-pill">61080002 [W]</span><span class="diag-char-pill">61080003 [N]</span><span class="diag-char-pill">61080004 [N]</span><span class="diag-char-pill">61080005 [N]</span></div>
+      </div>
+    `;
+  }
+
+  logBlePacket('Simulated GATT server started. Bonded with Virtual WHOOP 4.0.');
+  logBlePacket('GATT Services initialized: 0x180D (Heart Rate), 0x180F (Battery), 0x180A (Info), 61080001-... (Proprietary)');
 
   updateBleBattery(88);
 

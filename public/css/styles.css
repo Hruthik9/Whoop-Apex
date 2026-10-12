@@ -5540,6 +5540,275 @@ body {
   gap: 8px;
 }
 
+/* WHOOP Heart Rate Broadcast Alert Banner */
+.whoop-hr-broadcast-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.12), rgba(20, 24, 33, 0.95));
+  border: 1px solid rgba(255, 140, 0, 0.4);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 18px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(255, 140, 0, 0.15);
+  animation: bannerFadeIn 0.3s ease-out;
+}
+@keyframes bannerFadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.broadcast-banner-glow {
+  position: absolute;
+  top: -50px;
+  left: -50px;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(255, 140, 0, 0.3) 0%, transparent 70%);
+  pointer-events: none;
+}
+.broadcast-banner-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.broadcast-banner-body {
+  flex: 1;
+}
+.broadcast-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #FFA726;
+  margin-bottom: 6px;
+}
+.broadcast-tag {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  background: rgba(255, 167, 38, 0.2);
+  border: 1px solid rgba(255, 167, 38, 0.5);
+  color: #FFA726;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.broadcast-banner-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 8px 0;
+}
+.broadcast-banner-desc b {
+  color: #FFFFFF;
+}
+.broadcast-steps {
+  margin: 0 0 12px 18px;
+  padding: 0;
+  font-size: 12.5px;
+  color: #E2E8F0;
+  line-height: 1.6;
+}
+.broadcast-steps li {
+  margin-bottom: 2px;
+}
+.badge-on {
+  background: #00F076;
+  color: #000000;
+  font-weight: 800;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.broadcast-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.broadcast-auto-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+}
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+}
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #FFFFFF;
+}
+
+/* WHOOP & BLE Diagnostics Inspector Drawer */
+.ble-diagnostics-drawer {
+  margin-top: 16px;
+  background: #090B0F;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.ble-diagnostics-drawer:hover {
+  border-color: rgba(0, 229, 255, 0.3);
+}
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.02);
+}
+.drawer-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.drawer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.drawer-icon {
+  font-size: 14px;
+}
+.drawer-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #E2E8F0;
+  letter-spacing: 0.02em;
+}
+.drawer-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(0, 229, 255, 0.12);
+  color: #00E5FF;
+  border: 1px solid rgba(0, 229, 255, 0.25);
+}
+.drawer-arrow {
+  font-size: 11px;
+  color: var(--text-secondary);
+  transition: transform 0.2s;
+}
+.drawer-arrow.open {
+  transform: rotate(180deg);
+}
+.drawer-body {
+  padding: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.diag-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  margin-bottom: 14px;
+}
+.diag-meta-item {
+  font-size: 11.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.diag-meta-item .lbl {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.diag-meta-item .val {
+  color: #00E5FF;
+  font-family: ui-monospace, monospace;
+  font-weight: 600;
+}
+.diag-services-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.diag-service-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 11.5px;
+}
+.diag-service-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 4px;
+}
+.diag-service-uuid {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-secondary);
+}
+.diag-chars-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+.diag-char-pill {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  color: #A0ECFD;
+}
+.diag-packet-feed-wrap {
+  background: #050608;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.feed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+.btn-clear-feed {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.btn-clear-feed:hover {
+  color: #FFFFFF;
+}
+.feed-console {
+  padding: 8px 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  color: #38BDF8;
+  max-height: 120px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
 /* -------------------------------------------------------------
    Rep Counter Studio
    ------------------------------------------------------------- */
