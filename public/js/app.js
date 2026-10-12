@@ -5187,10 +5187,8 @@ function updateBreatheHardwareBadge() {
 function toggleBreatheSession() {
   if (!breatheState.active) {
     startBreatheSession();
-  } else if (breatheState.paused) {
-    resumeBreatheSession();
   } else {
-    pauseBreatheSession();
+    finishBreatheSession(false);
   }
 }
 
@@ -5810,7 +5808,7 @@ function drawBreatheCanvas(timestamp) {
    ========================================================================== */
 
 async function finishBreatheSession(autoCompleted = false) {
-  if (!breatheState.active && breatheState.elapsedSeconds < 10) return;
+  if (!breatheState.active && breatheState.elapsedSeconds === 0) return;
 
   breatheState.active = false;
   breatheState.paused = false;
