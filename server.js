@@ -604,6 +604,27 @@ app.get('/api/workouts/ble-sessions', (req, res) => {
   }
 });
 
+// Save an HRV Resonance Biofeedback session
+app.post('/api/biofeedback/session', (req, res) => {
+  try {
+    const session = db.saveBreathingSession(req.body || {});
+    res.json({ success: true, session });
+  } catch (err) {
+    console.error('Error saving biofeedback session:', err);
+    res.status(500).json({ error: 'Failed to save biofeedback session', details: err.message });
+  }
+});
+
+// Get recent HRV Resonance Biofeedback sessions
+app.get('/api/biofeedback/sessions', (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    res.json({ sessions: db.getBreathingSessions(limit) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve biofeedback sessions', details: err.message });
+  }
+});
+
 // -------------------------------------------------------------
 // Demo / Mock Data Endpoints
 // -------------------------------------------------------------

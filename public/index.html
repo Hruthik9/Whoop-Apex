@@ -76,6 +76,9 @@
         <button class="nav-tab-pill" data-tab="replab" id="tab-btn-replab">
           <span>Rep Lab & BLE</span>
         </button>
+        <button class="nav-tab-pill" data-tab="breathe" id="tab-btn-breathe">
+          <span>Breathe & HRV</span>
+        </button>
       </nav>
 
       <!-- Shell Right Controls -->
@@ -1765,6 +1768,255 @@
         </div>
       </section>
     </div>
+
+    <!-- =====================================================================
+         TAB: RESONANCE HRV BIOFEEDBACK & VAGAL STIMULATION LAB
+         ===================================================================== -->
+    <div class="tab-pane" id="pane-breathe">
+      <!-- Header Banner & Live Hardware Status -->
+      <section class="section-card breathe-hero-card">
+        <div class="breathe-hero-header">
+          <div class="breathe-hero-info">
+            <div class="card-tag" style="color: var(--whoop-cyan);">AUTONOMIC BIOFEEDBACK LAB • 0.1 HZ RESONANCE</div>
+            <h2 class="breathe-hero-title">Resonance HRV Breathing & Vagal Pacer</h2>
+            <p class="breathe-hero-sub">
+              Synchronize baroreflex blood-pressure oscillations with respiratory sinus arrhythmia (RSA). Elevate heart rate variability (HRV), downshift sympathetic stress, and restore autonomic balance.
+            </p>
+          </div>
+          <div class="breathe-hardware-status">
+            <div class="breathe-ble-badge" id="breathe-ble-badge">
+              <span class="status-dot status-dot-ble" id="breathe-ble-dot"></span>
+              <span id="breathe-ble-text">WHOOP Strap: Disconnected (Autonomous Pacer)</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="btn-breathe-pair-strap" style="margin-top: 6px; font-size: 11.5px; padding: 4px 10px;">
+              <span>⚡ Connect Live WHOOP BLE</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Protocol Selection Cards -->
+        <div class="breathe-protocols-wrapper">
+          <div class="breathe-protocol-label-row">
+            <span class="breathe-subheading">SELECT CLINICAL PROTOCOL</span>
+            <span class="breathe-meta-info" id="breathe-protocol-meta">Resonance Coherence • 5.5s Inhale / 5.5s Exhale (~5.5 bpm)</span>
+          </div>
+
+          <div class="breathe-protocol-grid">
+            <!-- Protocol 1: Resonance Coherence -->
+            <button type="button" class="breathe-protocol-card active" data-protocol="resonance" id="proto-card-resonance">
+              <div class="proto-badge" style="background: rgba(0, 240, 255, 0.12); color: #00F0FF; border: 1px solid rgba(0, 240, 255, 0.3);">
+                0.1 HZ GOLD STANDARD
+              </div>
+              <h4 class="proto-title">Resonance Coherence</h4>
+              <div class="proto-cadence">5.5s Inhale • 5.5s Exhale</div>
+              <p class="proto-desc">Baroreflex resonance frequency maximizing respiratory sinus arrhythmia and parasympathetic vagal tone.</p>
+            </button>
+
+            <!-- Protocol 2: Box Breathing -->
+            <button type="button" class="breathe-protocol-card" data-protocol="box" id="proto-card-box">
+              <div class="proto-badge" style="background: rgba(245, 158, 11, 0.12); color: #FBBF24; border: 1px solid rgba(245, 158, 11, 0.3);">
+                NAVY SEAL TACTICAL
+              </div>
+              <h4 class="proto-title">Box Breathing (4-4-4-4)</h4>
+              <div class="proto-cadence">4s In • 4s Hold • 4s Out • 4s Hold</div>
+              <p class="proto-desc">Equalized autonomic pacing to immediately blunt adrenaline surges, steady motor tremor, and restore focus.</p>
+            </button>
+
+            <!-- Protocol 3: 4-7-8 Sleep Descent -->
+            <button type="button" class="breathe-protocol-card" data-protocol="sleep" id="proto-card-sleep">
+              <div class="proto-badge" style="background: rgba(168, 85, 247, 0.12); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3);">
+                SLEEP & TRANQUILITY
+              </div>
+              <h4 class="proto-title">4-7-8 Sleep Descent</h4>
+              <div class="proto-cadence">4s In • 7s Hold • 8s Exhale</div>
+              <p class="proto-desc">Dr. Andrew Weil sedative pacing. Prolonged breath retention elevates CO2 for acetylcholine parasympathetic release.</p>
+            </button>
+
+            <!-- Protocol 4: 7-11 Recovery Flush -->
+            <button type="button" class="breathe-protocol-card" data-protocol="flush" id="proto-card-flush">
+              <div class="proto-badge" style="background: rgba(0, 240, 118, 0.12); color: #00F076; border: 1px solid rgba(0, 240, 118, 0.3);">
+                POST-WORKOUT FLUSH
+              </div>
+              <h4 class="proto-title">7-11 Recovery Flush</h4>
+              <div class="proto-cadence">7s Inhale • 11s Exhale</div>
+              <p class="proto-desc">Extended vagal deceleration to rapidly drop heart rate, accelerate post-exercise lactate clearance, and cool central nervous system.</p>
+            </button>
+          </div>
+        </div>
+
+        <!-- Duration Presets -->
+        <div class="breathe-duration-row">
+          <span class="breathe-duration-label">SESSION TARGET:</span>
+          <div class="breathe-duration-pills">
+            <button type="button" class="breathe-dur-pill" data-seconds="120">2 Min (Quick Reset)</button>
+            <button type="button" class="breathe-dur-pill active" data-seconds="300">5 Min (Clinical Optimal)</button>
+            <button type="button" class="breathe-dur-pill" data-seconds="600">10 Min (Deep Vagal)</button>
+            <button type="button" class="breathe-dur-pill" data-seconds="900">15 Min (Neuro Master)</button>
+            <button type="button" class="breathe-dur-pill" data-seconds="0">Free Flow (∞)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Center Stage: Sacred Geometry Coherence Orb & Sensory Biofeedback -->
+      <section class="section-card breathe-stage-card">
+        <div class="breathe-stage-layout">
+          <!-- Left / Center: Interactive HTML5 Canvas Sacred Geometry Coherence Orb -->
+          <div class="breathe-orb-wrapper">
+            <canvas id="breathe-canvas" width="460" height="460" class="breathe-canvas"></canvas>
+            
+            <!-- Floating Heads-Up Display (HUD) overlay -->
+            <div class="breathe-hud-overlay" id="breathe-hud-overlay">
+              <div class="breathe-hud-phase-badge" id="breathe-phase-badge">INHALE</div>
+              <div class="breathe-hud-countdown" id="breathe-countdown">5.5s</div>
+              <div class="breathe-hud-instruction" id="breathe-guide-instruction">Breathe deeply through nose down into abdomen</div>
+              <div class="breathe-hud-cycle-counter">
+                Cycle: <strong id="breathe-cycle-current">0</strong> / <span id="breathe-cycle-target">27</span> • <span id="breathe-clock-elapsed">00:00</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Controls, Sensory Sound & Haptics, Live Autonomic Coherence Telemetry -->
+          <div class="breathe-telemetry-panel">
+            <!-- Master Session Control Buttons -->
+            <div class="breathe-session-controls">
+              <button type="button" class="btn btn-primary btn-lg breathe-cta-btn" id="btn-breathe-start">
+                <span id="btn-breathe-start-label">▶ Begin Biofeedback Session</span>
+              </button>
+              <div class="breathe-secondary-actions">
+                <button type="button" class="btn btn-outline" id="btn-breathe-pause" disabled title="Pause or Resume Session">
+                  <span id="btn-breathe-pause-label">⏸ Pause</span>
+                </button>
+                <button type="button" class="btn btn-outline" id="btn-breathe-reset" title="Reset Session Clock">
+                  <span>↺ Reset</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Multi-Sensory Acoustic & Haptic Engine -->
+            <div class="breathe-sensory-box">
+              <div class="sensory-box-title">ACOUSTIC & HAPTIC BIOFEEDBACK ENGINE</div>
+              
+              <div class="sensory-control-row">
+                <label for="breathe-audio-preset" class="sensory-label">Acoustic Tone:</label>
+                <select id="breathe-audio-preset" class="form-select sensory-select">
+                  <option value="singing-bowl" selected>Tibetan Singing Bowl (528 Hz Harmonic Chime)</option>
+                  <option value="crystal-bell">Crystal Meditation Bell (432 Hz Solfeggio)</option>
+                  <option value="ocean-vagus">Oceanic Pink Noise Vagus Wave</option>
+                  <option value="mute">Mute Audio</option>
+                </select>
+              </div>
+
+              <div class="sensory-control-row">
+                <label for="breathe-volume-slider" class="sensory-label">Chime Volume:</label>
+                <input type="range" id="breathe-volume-slider" min="0" max="100" value="70" class="sensory-slider">
+                <span id="breathe-volume-val" class="sensory-val">70%</span>
+              </div>
+
+              <div class="sensory-toggle-row">
+                <label class="sensory-switch-wrap" title="Vibrate phone on inhalation/exhalation transitions for eyes-closed mindful meditation">
+                  <input type="checkbox" id="breathe-haptics-toggle" checked>
+                  <span class="sensory-switch-slider"></span>
+                  <span class="sensory-switch-label">Haptic Vibrations (Eyes-Closed Mindfulness)</span>
+                </label>
+              </div>
+
+              <div class="sensory-toggle-row">
+                <label class="sensory-switch-wrap">
+                  <input type="checkbox" id="breathe-starfield-toggle" checked>
+                  <span class="sensory-switch-slider"></span>
+                  <span class="sensory-switch-label">Cosmic Particle Starfield</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Real-Time Autonomic Coherence Telemetry Cards -->
+            <div class="breathe-metrics-grid">
+              <!-- Metric 1: Live HR & R-R Interval -->
+              <div class="breathe-metric-card">
+                <div class="breathe-m-label">LIVE HEART RATE</div>
+                <div class="breathe-m-val-row">
+                  <span class="breathe-m-val" id="breathe-live-hr">--</span>
+                  <span class="breathe-m-unit">BPM</span>
+                </div>
+                <div class="breathe-m-sub" id="breathe-live-rr-row">
+                  R-R: <strong id="breathe-live-rr">--</strong> ms
+                </div>
+              </div>
+
+              <!-- Metric 2: Live Autonomic Coherence Score -->
+              <div class="breathe-metric-card">
+                <div class="breathe-m-label">AUTONOMIC COHERENCE</div>
+                <div class="breathe-m-val-row">
+                  <span class="breathe-m-val text-cyan" id="breathe-coherence-score">--</span>
+                  <span class="breathe-m-unit">%</span>
+                </div>
+                <div class="breathe-coherence-badge" id="breathe-coherence-badge">STANDBY</div>
+              </div>
+
+              <!-- Metric 3: Time in Resonance & Vagal Gain -->
+              <div class="breathe-metric-card">
+                <div class="breathe-m-label">HIGH COHERENCE TIME</div>
+                <div class="breathe-m-val-row">
+                  <span class="breathe-m-val text-green" id="breathe-resonance-time">00:00</span>
+                </div>
+                <div class="breathe-m-sub">
+                  Est. Vagal Gain: <strong id="breathe-vagal-gain" class="text-green">+0%</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- Coherence Bar Meter -->
+            <div class="coherence-meter-container">
+              <div class="coherence-meter-labels">
+                <span>0% Disordered</span>
+                <span>Baroreflex Resonance Zone (0.1 Hz)</span>
+                <span>100% Coherent</span>
+              </div>
+              <div class="coherence-meter-bar-wrap">
+                <div class="coherence-meter-fill" id="breathe-coherence-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Recent Biofeedback Sessions Table -->
+      <section class="section-card breathe-history-card">
+        <div class="card-header">
+          <div>
+            <div class="card-tag">CLINICAL VAGAL RECOVERY LOG</div>
+            <h3 class="card-title">Recent Biofeedback Sessions</h3>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-refresh-breathe-history">
+            <span>↻ Refresh Log</span>
+          </button>
+        </div>
+
+        <div class="breathe-history-table-wrap">
+          <table class="rep-table" id="breathe-history-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Protocol</th>
+                <th>Duration</th>
+                <th>Avg Coherence</th>
+                <th>Peak Coherence</th>
+                <th>Resonance Time</th>
+                <th>Est. Vagal Gain (RMSSD)</th>
+                <th>Heart Rate Delta</th>
+              </tr>
+            </thead>
+            <tbody id="breathe-history-tbody">
+              <tr>
+                <td colspan="8" class="text-muted text-center" style="padding: 18px;">
+                  No biofeedback sessions logged yet. Select a protocol and click "Begin Biofeedback Session" above!
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </div> <!-- /dashboard-shell -->
 
   <!-- Modal: Habit Library & Custom Tracker -->
@@ -2015,6 +2267,10 @@
     <button class="bottom-dock-tab" data-tab="replab" id="dock-btn-replab" aria-label="Rep Lab & BLE">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M2 9h4"/><path d="M18 9h4"/><path d="M2 15h4"/><path d="M18 15h4"/><path d="M6 12h12"/></svg>
       <span>Rep Lab</span>
+    </button>
+    <button class="bottom-dock-tab" data-tab="breathe" id="dock-btn-breathe" aria-label="Breathe & HRV">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
+      <span>Breathe</span>
     </button>
   </nav>
 

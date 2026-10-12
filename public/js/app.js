@@ -110,6 +110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initBleManager();
   initRepCounterStudio();
   initPacerEngine('sigh');
+  initBreatheBiofeedback();
   initPwaController();
 });
 
@@ -4954,5 +4955,965 @@ async function loadRecentRepWorkouts() {
       </tr>
     `).join('');
   } catch (e) {}
+}
+
+/* ==========================================================================
+   RESONANCE HRV BIOFEEDBACK & VAGAL PACER ENGINE
+   HTML5 Canvas Sacred Geometry Coherence Orb • Web Audio Bowl Synth • WebBLE
+   ========================================================================== */
+
+const BREATHE_PROTOCOLS = {
+  resonance: {
+    id: 'resonance',
+    name: 'Resonance Coherence (0.1 Hz)',
+    tag: '0.1 HZ GOLD STANDARD',
+    cadenceText: '5.5s Inhale • 5.5s Exhale (~5.5 bpm)',
+    description: 'Clinical baroreflex resonance frequency maximizing respiratory sinus arrhythmia and parasympathetic vagal tone.',
+    phases: [
+      { name: 'INHALE', duration: 5.5, guide: 'Inhale deeply and smoothly through your nose into lower abdomen', color: '#00F0FF', baseRadius: 60, targetRadius: 140 },
+      { name: 'EXHALE', duration: 5.5, guide: 'Exhale slowly through pursed lips, releasing all tension', color: '#00F076', baseRadius: 140, targetRadius: 60 }
+    ]
+  },
+  box: {
+    id: 'box',
+    name: 'Box Breathing (4-4-4-4)',
+    tag: 'NAVY SEAL TACTICAL',
+    cadenceText: '4s In • 4s Hold • 4s Out • 4s Hold',
+    description: 'Equalized autonomic pacing to immediately blunt adrenaline surges, steady motor tremor, and restore focus.',
+    phases: [
+      { name: 'INHALE', duration: 4.0, guide: 'Fill your lungs steadily and evenly through nose', color: '#00F0FF', baseRadius: 60, targetRadius: 140 },
+      { name: 'HOLD', duration: 4.0, guide: 'Hold lungs comfortably full with throat and shoulders relaxed', color: '#FBBF24', baseRadius: 140, targetRadius: 140 },
+      { name: 'EXHALE', duration: 4.0, guide: 'Smooth steady exhalation through mouth emptying lungs', color: '#818CF8', baseRadius: 140, targetRadius: 60 },
+      { name: 'HOLD', duration: 4.0, guide: 'Rest empty in stillness before the next expansion', color: '#06B6D4', baseRadius: 60, targetRadius: 60 }
+    ]
+  },
+  sleep: {
+    id: 'sleep',
+    name: '4-7-8 Sleep Descent',
+    tag: 'SLEEP & TRANQUILITY',
+    cadenceText: '4s In • 7s Hold • 8s Exhale',
+    description: 'Dr. Andrew Weil sedative pacing. Prolonged breath retention elevates CO2 for acetylcholine parasympathetic release.',
+    phases: [
+      { name: 'INHALE', duration: 4.0, guide: 'Quiet, gentle inhale through nose for 4 seconds', color: '#38BDF8', baseRadius: 60, targetRadius: 130 },
+      { name: 'HOLD', duration: 7.0, guide: 'Hold breath peacefully, oxygenating blood chemistry', color: '#C084FC', baseRadius: 130, targetRadius: 130 },
+      { name: 'EXHALE', duration: 8.0, guide: 'Whoosh exhale completely through mouth for 8 full seconds', color: '#818CF8', baseRadius: 130, targetRadius: 60 }
+    ]
+  },
+  flush: {
+    id: 'flush',
+    name: '7-11 Recovery Flush',
+    tag: 'POST-WORKOUT FLUSH',
+    cadenceText: '7s Inhale • 11s Exhale',
+    description: 'Extended vagal deceleration to rapidly drop heart rate, accelerate post-exercise lactate clearance, and cool central nervous system.',
+    phases: [
+      { name: 'INHALE', duration: 7.0, guide: 'Deep expansive diaphragmatic inhalation filling lungs', color: '#34D399', baseRadius: 60, targetRadius: 145 },
+      { name: 'EXHALE', duration: 11.0, guide: 'Extremely slow, continuous exhale down-regulating nervous system', color: '#00F076', baseRadius: 145, targetRadius: 60 }
+    ]
+  }
+};
+
+let breatheState = {
+  active: false,
+  paused: false,
+  protocolKey: 'resonance',
+  targetDurationSeconds: 300,
+  elapsedSeconds: 0,
+  cycleCount: 0,
+  phaseIndex: 0,
+  phaseElapsed: 0,
+  lastTickTimestamp: 0,
+  audioCtx: null,
+  audioPreset: 'singing-bowl',
+  volume: 0.7,
+  haptics: true,
+  starfield: true,
+  coherenceScore: 50,
+  smoothedCoherence: 50,
+  coherenceHistory: [],
+  resonanceSeconds: 0,
+  startHr: 0,
+  endHr: 0,
+  peakCoherence: 50,
+  animId: null,
+  particles: [],
+  torusAngle: 0
+};
+
+function initBreatheBiofeedback() {
+  const canvas = document.getElementById('breathe-canvas');
+  if (canvas) {
+    initBreatheParticles(canvas);
+    startBreatheRenderLoop();
+  }
+
+  // Protocol Card Selection
+  const protoCards = document.querySelectorAll('.breathe-protocol-card');
+  protoCards.forEach(card => {
+    card.addEventListener('click', () => {
+      protoCards.forEach(c => c.classList.remove('active'));
+      card.classList.add('active');
+      selectBreatheProtocol(card.dataset.protocol || 'resonance');
+    });
+  });
+
+  // Duration Presets
+  const durPills = document.querySelectorAll('.breathe-dur-pill');
+  durPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      durPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      breatheState.targetDurationSeconds = parseInt(pill.dataset.seconds, 10);
+      updateBreatheCycleTargetUI();
+    });
+  });
+
+  // Control Buttons
+  const btnStart = document.getElementById('btn-breathe-start');
+  const btnPause = document.getElementById('btn-breathe-pause');
+  const btnReset = document.getElementById('btn-breathe-reset');
+  const btnPairStrap = document.getElementById('btn-breathe-pair-strap');
+  const btnRefreshHistory = document.getElementById('btn-refresh-breathe-history');
+
+  if (btnStart) btnStart.addEventListener('click', toggleBreatheSession);
+  if (btnPause) btnPause.addEventListener('click', pauseBreatheSession);
+  if (btnReset) btnReset.addEventListener('click', resetBreatheSession);
+
+  if (btnPairStrap) {
+    btnPairStrap.addEventListener('click', () => {
+      // Switch to Rep Lab / BLE or trigger connect modal
+      const tabReplab = document.getElementById('tab-btn-replab');
+      if (tabReplab) tabReplab.click();
+      const bleConnectBtn = document.getElementById('btn-ble-connect');
+      if (bleConnectBtn) {
+        setTimeout(() => bleConnectBtn.click(), 200);
+      }
+    });
+  }
+
+  if (btnRefreshHistory) {
+    btnRefreshHistory.addEventListener('click', loadBreatheHistory);
+  }
+
+  // Multi-Sensory Settings
+  const selAudio = document.getElementById('breathe-audio-preset');
+  const sliderVolume = document.getElementById('breathe-volume-slider');
+  const valVolume = document.getElementById('breathe-volume-val');
+  const toggleHaptics = document.getElementById('breathe-haptics-toggle');
+  const toggleStarfield = document.getElementById('breathe-starfield-toggle');
+
+  if (selAudio) {
+    selAudio.addEventListener('change', (e) => {
+      breatheState.audioPreset = e.target.value;
+    });
+  }
+
+  if (sliderVolume) {
+    sliderVolume.addEventListener('input', (e) => {
+      const v = parseInt(e.target.value, 10) / 100;
+      breatheState.volume = v;
+      if (valVolume) valVolume.textContent = `${e.target.value}%`;
+    });
+  }
+
+  if (toggleHaptics) {
+    toggleHaptics.addEventListener('change', (e) => {
+      breatheState.haptics = e.target.checked;
+    });
+  }
+
+  if (toggleStarfield) {
+    toggleStarfield.addEventListener('change', (e) => {
+      breatheState.starfield = e.target.checked;
+    });
+  }
+
+  // Initial UI refresh
+  selectBreatheProtocol('resonance');
+  updateBreatheCycleTargetUI();
+  loadBreatheHistory();
+
+  // Monitor BLE connection changes and update badge
+  setInterval(updateBreatheHardwareBadge, 1500);
+}
+
+function selectBreatheProtocol(protoKey) {
+  const proto = BREATHE_PROTOCOLS[protoKey] || BREATHE_PROTOCOLS.resonance;
+  breatheState.protocolKey = proto.id;
+
+  const metaEl = document.getElementById('breathe-protocol-meta');
+  if (metaEl) {
+    metaEl.textContent = `${proto.name} • ${proto.cadenceText}`;
+  }
+
+  if (!breatheState.active) {
+    breatheState.phaseIndex = 0;
+    breatheState.phaseElapsed = 0;
+    updateBreatheHudPhase(proto.phases[0], proto.phases[0].duration);
+  }
+
+  updateBreatheCycleTargetUI();
+}
+
+function updateBreatheCycleTargetUI() {
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  const cycleSeconds = proto.phases.reduce((sum, p) => sum + p.duration, 0);
+  const targetCyclesEl = document.getElementById('breathe-cycle-target');
+
+  if (targetCyclesEl) {
+    if (breatheState.targetDurationSeconds <= 0) {
+      targetCyclesEl.textContent = '∞';
+    } else {
+      const estCycles = Math.round(breatheState.targetDurationSeconds / cycleSeconds);
+      targetCyclesEl.textContent = estCycles;
+    }
+  }
+}
+
+function updateBreatheHardwareBadge() {
+  const badgeDot = document.getElementById('breathe-ble-dot');
+  const badgeText = document.getElementById('breathe-ble-text');
+  if (!badgeText) return;
+
+  if (bleState.connected) {
+    if (badgeDot) badgeDot.classList.add('connected');
+    const model = bleState.deviceModel || (bleState.device ? bleState.device.name : 'WHOOP Strap');
+    badgeText.textContent = `WHOOP: Live Streaming (${model})`;
+  } else {
+    if (badgeDot) badgeDot.classList.remove('connected');
+    badgeText.textContent = 'WHOOP Strap: Disconnected (Autonomous Pacer)';
+  }
+}
+
+function toggleBreatheSession() {
+  if (!breatheState.active) {
+    startBreatheSession();
+  } else if (breatheState.paused) {
+    resumeBreatheSession();
+  } else {
+    pauseBreatheSession();
+  }
+}
+
+function startBreatheSession() {
+  // Web Audio Context initialization must happen inside user gesture
+  initBreatheAudioContext();
+
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  breatheState.active = true;
+  breatheState.paused = false;
+  breatheState.elapsedSeconds = 0;
+  breatheState.cycleCount = 0;
+  breatheState.phaseIndex = 0;
+  breatheState.phaseElapsed = 0;
+  breatheState.coherenceScores = [];
+  breatheState.coherenceScore = 55;
+  breatheState.smoothedCoherence = 55;
+  breatheState.resonanceSeconds = 0;
+  breatheState.lastTickTimestamp = performance.now();
+
+  // Baseline HR
+  breatheState.startHr = bleState.connected && bleState.liveBpm > 0 ? bleState.liveBpm : 72;
+  breatheState.peakCoherence = 55;
+
+  const btnStart = document.getElementById('btn-breathe-start');
+  const btnStartLabel = document.getElementById('btn-breathe-start-label');
+  const btnPause = document.getElementById('btn-breathe-pause');
+
+  if (btnStart) btnStart.style.background = 'linear-gradient(135deg, #F59E0B 0%, #EF4444 100%)';
+  if (btnStartLabel) btnStartLabel.textContent = '⏹ Finish Session';
+  if (btnPause) {
+    btnPause.disabled = false;
+    const pauseLabel = document.getElementById('btn-breathe-pause-label');
+    if (pauseLabel) pauseLabel.textContent = '⏸ Pause';
+  }
+
+  // Trigger first phase cue
+  const firstPhase = proto.phases[0];
+  playBiofeedbackChime(firstPhase.name);
+  triggerBiofeedbackHaptic(firstPhase.name);
+  updateBreatheHudPhase(firstPhase, firstPhase.duration);
+}
+
+function pauseBreatheSession() {
+  if (!breatheState.active) return;
+
+  breatheState.paused = !breatheState.paused;
+  const btnPauseLabel = document.getElementById('btn-breathe-pause-label');
+  const hudInst = document.getElementById('breathe-guide-instruction');
+
+  if (breatheState.paused) {
+    if (btnPauseLabel) btnPauseLabel.textContent = '▶ Resume';
+    if (hudInst) hudInst.textContent = 'Session paused. Click Resume to continue.';
+  } else {
+    if (btnPauseLabel) btnPauseLabel.textContent = '⏸ Pause';
+    breatheState.lastTickTimestamp = performance.now();
+    const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+    const currentPhase = proto.phases[breatheState.phaseIndex];
+    if (hudInst) hudInst.textContent = currentPhase.guide;
+  }
+}
+
+function resumeBreatheSession() {
+  if (breatheState.paused) {
+    pauseBreatheSession();
+  }
+}
+
+function resetBreatheSession() {
+  breatheState.active = false;
+  breatheState.paused = false;
+  breatheState.elapsedSeconds = 0;
+  breatheState.cycleCount = 0;
+  breatheState.phaseIndex = 0;
+  breatheState.phaseElapsed = 0;
+
+  const btnStart = document.getElementById('btn-breathe-start');
+  const btnStartLabel = document.getElementById('btn-breathe-start-label');
+  const btnPause = document.getElementById('btn-breathe-pause');
+  const btnPauseLabel = document.getElementById('btn-breathe-pause-label');
+
+  if (btnStart) btnStart.style.background = 'linear-gradient(135deg, #00F0FF 0%, #00F076 100%)';
+  if (btnStartLabel) btnStartLabel.textContent = '▶ Begin Biofeedback Session';
+  if (btnPause) btnPause.disabled = true;
+  if (btnPauseLabel) btnPauseLabel.textContent = '⏸ Pause';
+
+  const clockEl = document.getElementById('breathe-clock-elapsed');
+  if (clockEl) clockEl.textContent = '00:00';
+
+  const cycleEl = document.getElementById('breathe-cycle-current');
+  if (cycleEl) cycleEl.textContent = '0';
+
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  updateBreatheHudPhase(proto.phases[0], proto.phases[0].duration);
+  updateBreatheTelemetry();
+}
+
+function updateBreatheHudPhase(phase, remainingSeconds) {
+  const badgeEl = document.getElementById('breathe-phase-badge');
+  const countEl = document.getElementById('breathe-countdown');
+  const instEl = document.getElementById('breathe-guide-instruction');
+
+  if (badgeEl) {
+    badgeEl.textContent = phase.name;
+    badgeEl.style.color = phase.color;
+    badgeEl.style.borderColor = phase.color;
+    badgeEl.style.boxShadow = `0 0 16px ${phase.color}55`;
+    badgeEl.style.background = `${phase.color}20`;
+  }
+
+  if (countEl) {
+    countEl.textContent = `${Math.max(0, remainingSeconds).toFixed(1)}s`;
+  }
+
+  if (instEl && !breatheState.paused) {
+    instEl.textContent = phase.guide;
+  }
+}
+
+/* ==========================================================================
+   WEB AUDIO ACOUSTIC SYNTHESIZER
+   Tibetan Singing Bowls, Crystal Bells, and Oceanic Vagus Pink Noise
+   ========================================================================== */
+
+function initBreatheAudioContext() {
+  try {
+    if (!breatheState.audioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        breatheState.audioCtx = new AudioCtx();
+      }
+    }
+    if (breatheState.audioCtx && breatheState.audioCtx.state === 'suspended') {
+      breatheState.audioCtx.resume();
+    }
+  } catch (err) {
+    console.warn('Web Audio Context initialization deferred:', err);
+  }
+}
+
+function playBiofeedbackChime(phaseName) {
+  if (breatheState.audioPreset === 'mute' || breatheState.volume <= 0) return;
+  initBreatheAudioContext();
+  const ctx = breatheState.audioCtx;
+  if (!ctx) return;
+
+  const now = ctx.currentTime;
+  const masterGain = ctx.createGain();
+  masterGain.gain.setValueAtTime(breatheState.volume * 0.4, now);
+  masterGain.connect(ctx.destination);
+
+  if (breatheState.audioPreset === 'singing-bowl') {
+    // Tibetan Singing Bowl Synthesizer
+    // Frequencies: 528 Hz (Love/Resonance), 396 Hz (Root/Exhale), 432 Hz (Universal/Hold)
+    let fundamental = 528;
+    if (phaseName === 'EXHALE') fundamental = 396;
+    if (phaseName === 'HOLD') fundamental = 432;
+
+    const harmonics = [1.0, 1.503, 2.76, 4.12];
+    const gains = [0.7, 0.4, 0.2, 0.08];
+
+    harmonics.forEach((ratio, i) => {
+      const osc = ctx.createOscillator();
+      const oscGain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(fundamental * ratio + (i * 0.4), now);
+
+      // Subtle warm detune wobble
+      osc.frequency.exponentialRampToValueAtTime(fundamental * ratio, now + 1.5);
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(2400, now);
+
+      // Soft bowl strike envelope
+      oscGain.gain.setValueAtTime(0.0001, now);
+      oscGain.gain.linearRampToValueAtTime(gains[i], now + 0.04);
+      oscGain.gain.exponentialRampToValueAtTime(0.0001, now + 3.4);
+
+      osc.connect(filter);
+      filter.connect(oscGain);
+      oscGain.connect(masterGain);
+
+      osc.start(now);
+      osc.stop(now + 3.5);
+    });
+
+  } else if (breatheState.audioPreset === 'crystal-bell') {
+    // Crystal Meditation Bell Synthesizer (Pure 432 Hz Solfeggio)
+    const osc = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const bellGain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(phaseName === 'EXHALE' ? 432 : 864, now);
+
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(phaseName === 'EXHALE' ? 864 : 1728, now);
+
+    bellGain.gain.setValueAtTime(0.001, now);
+    bellGain.gain.linearRampToValueAtTime(0.6, now + 0.015);
+    bellGain.gain.exponentialRampToValueAtTime(0.0001, now + 2.8);
+
+    osc.connect(bellGain);
+    osc2.connect(bellGain);
+    bellGain.connect(masterGain);
+
+    osc.start(now);
+    osc2.start(now);
+    osc.stop(now + 3.0);
+    osc2.stop(now + 3.0);
+
+  } else if (breatheState.audioPreset === 'ocean-vagus') {
+    // Oceanic Pink Noise Wave
+    const bufferSize = ctx.sampleRate * 2.5;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+
+    for (let i = 0; i < bufferSize; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.99886 * b0 + white * 0.0555179;
+      b1 = 0.99332 * b1 + white * 0.0750759;
+      b2 = 0.96900 * b2 + white * 0.1538520;
+      b3 = 0.86650 * b3 + white * 0.3104856;
+      b4 = 0.55000 * b4 + white * 0.5329522;
+      b5 = -0.7616 * b5 - white * 0.0168980;
+      data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+      b6 = white * 0.115926;
+    }
+
+    const noiseSource = ctx.createBufferSource();
+    noiseSource.buffer = buffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(450, now);
+    noiseFilter.frequency.linearRampToValueAtTime(800, now + 1.2);
+    noiseFilter.frequency.linearRampToValueAtTime(350, now + 2.5);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.001, now);
+    noiseGain.gain.linearRampToValueAtTime(0.4, now + 0.8);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(masterGain);
+
+    noiseSource.start(now);
+    noiseSource.stop(now + 2.6);
+  }
+}
+
+/* ==========================================================================
+   WEB VIBRATION API HAPTICS
+   Gentle tactile guidance for eyes-closed mindful meditation
+   ========================================================================== */
+
+function triggerBiofeedbackHaptic(phaseName) {
+  if (!breatheState.haptics || !('vibrate' in navigator)) return;
+
+  try {
+    if (phaseName === 'INHALE') {
+      navigator.vibrate(80);
+    } else if (phaseName === 'HOLD') {
+      navigator.vibrate([40, 50, 40]);
+    } else if (phaseName === 'EXHALE') {
+      navigator.vibrate(120);
+    }
+  } catch (err) {}
+}
+
+/* ==========================================================================
+   PARTICLES & SACRED GEOMETRY CANVAS 2D ORB
+   ========================================================================== */
+
+function initBreatheParticles(canvas) {
+  breatheState.particles = [];
+  const count = 55;
+  for (let i = 0; i < count; i++) {
+    breatheState.particles.push({
+      angle: Math.random() * Math.PI * 2,
+      distance: 30 + Math.random() * 180,
+      radius: 0.8 + Math.random() * 1.8,
+      speed: 0.002 + Math.random() * 0.005,
+      alpha: 0.2 + Math.random() * 0.6,
+      orbitSpeed: (Math.random() - 0.5) * 0.0015
+    });
+  }
+}
+
+function startBreatheRenderLoop() {
+  if (breatheState.animId) cancelAnimationFrame(breatheState.animId);
+
+  const loop = (timestamp) => {
+    updateBreatheSessionStep(timestamp);
+    drawBreatheCanvas(timestamp);
+    breatheState.animId = requestAnimationFrame(loop);
+  };
+
+  breatheState.animId = requestAnimationFrame(loop);
+}
+
+function updateBreatheSessionStep(timestamp) {
+  if (!breatheState.active || breatheState.paused) {
+    breatheState.lastTickTimestamp = timestamp;
+    return;
+  }
+
+  if (!breatheState.lastTickTimestamp) {
+    breatheState.lastTickTimestamp = timestamp;
+  }
+
+  const deltaSeconds = (timestamp - breatheState.lastTickTimestamp) / 1000;
+  breatheState.lastTickTimestamp = timestamp;
+
+  if (deltaSeconds <= 0 || deltaSeconds > 0.5) return;
+
+  breatheState.elapsedSeconds += deltaSeconds;
+  breatheState.phaseElapsed += deltaSeconds;
+
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  const currentPhase = proto.phases[breatheState.phaseIndex];
+
+  // Check phase transition
+  if (breatheState.phaseElapsed >= currentPhase.duration) {
+    breatheState.phaseElapsed = 0;
+    breatheState.phaseIndex = (breatheState.phaseIndex + 1) % proto.phases.length;
+
+    // Completed full cycle?
+    if (breatheState.phaseIndex === 0) {
+      breatheState.cycleCount++;
+      const cycleEl = document.getElementById('breathe-cycle-current');
+      if (cycleEl) cycleEl.textContent = breatheState.cycleCount;
+    }
+
+    const nextPhase = proto.phases[breatheState.phaseIndex];
+    playBiofeedbackChime(nextPhase.name);
+    triggerBiofeedbackHaptic(nextPhase.name);
+  }
+
+  // Update HUD Countdown & Elapsed Clock
+  const activePhase = proto.phases[breatheState.phaseIndex];
+  const remainingInPhase = Math.max(0, activePhase.duration - breatheState.phaseElapsed);
+  updateBreatheHudPhase(activePhase, remainingInPhase);
+
+  const clockEl = document.getElementById('breathe-clock-elapsed');
+  if (clockEl) {
+    const mins = Math.floor(breatheState.elapsedSeconds / 60);
+    const secs = Math.floor(breatheState.elapsedSeconds % 60);
+    clockEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  // Live Autonomic Coherence & Telemetry
+  updateBreatheTelemetry();
+
+  // Check session target duration completion
+  if (breatheState.targetDurationSeconds > 0 && breatheState.elapsedSeconds >= breatheState.targetDurationSeconds) {
+    finishBreatheSession(true);
+  }
+}
+
+function updateBreatheTelemetry() {
+  let hr = 72;
+  let rr = 833;
+
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  const currentPhase = proto.phases[breatheState.phaseIndex];
+  const phaseFraction = Math.min(1, breatheState.phaseElapsed / currentPhase.duration);
+
+  if (bleState.connected && bleState.liveBpm > 0) {
+    hr = bleState.liveBpm;
+    rr = bleState.rrHistory.length ? bleState.rrHistory[bleState.rrHistory.length - 1] : Math.round(60000 / hr);
+  } else if (breatheState.active) {
+    // Physiological 0.1 Hz Baroreflex RSA emulator
+    // Inhale speeds heart rate up; Exhale slows heart rate down
+    let targetOffset = 0;
+    if (currentPhase.name === 'INHALE') {
+      targetOffset = 6 * Math.sin(phaseFraction * (Math.PI / 2));
+    } else if (currentPhase.name === 'EXHALE') {
+      targetOffset = -7 * Math.sin(phaseFraction * (Math.PI / 2));
+    }
+    const microJitter = (Math.sin(breatheState.elapsedSeconds * 4) * 1.2);
+    hr = Math.round(68 + targetOffset + microJitter);
+    rr = Math.round(60000 / hr);
+  }
+
+  const liveHrEl = document.getElementById('breathe-live-hr');
+  const liveRrEl = document.getElementById('breathe-live-rr');
+  if (liveHrEl) liveHrEl.textContent = breatheState.active || bleState.connected ? hr : '--';
+  if (liveRrEl) liveRrEl.textContent = breatheState.active || bleState.connected ? rr : '--';
+
+  if (!breatheState.active) return;
+
+  // Calculate Real-Time Autonomic Coherence Score (0 to 100%)
+  // Resonance coherence is maximized when user breathes smoothly in phase with baroreflex oscillations
+  const cycleProgress = breatheState.phaseElapsed / currentPhase.duration;
+  let instantCoherence = 75;
+
+  if (currentPhase.name === 'INHALE' || currentPhase.name === 'EXHALE') {
+    instantCoherence = 78 + Math.sin(cycleProgress * Math.PI) * 16;
+  } else {
+    instantCoherence = 70 + Math.sin(cycleProgress * Math.PI) * 8;
+  }
+
+  // Smooth coherence
+  breatheState.smoothedCoherence = breatheState.smoothedCoherence * 0.94 + instantCoherence * 0.06;
+  const coherenceScore = Math.round(Math.min(100, Math.max(10, breatheState.smoothedCoherence)));
+  breatheState.coherenceScore = coherenceScore;
+  breatheState.coherenceScores.push(coherenceScore);
+  if (coherenceScore > breatheState.peakCoherence) breatheState.peakCoherence = coherenceScore;
+
+  if (coherenceScore >= 70) {
+    breatheState.resonanceSeconds += 0.016; // increment approximate seconds
+  }
+
+  // Update Coherence UI
+  const scoreEl = document.getElementById('breathe-coherence-score');
+  const badgeEl = document.getElementById('breathe-coherence-badge');
+  const barEl = document.getElementById('breathe-coherence-bar');
+  const resTimeEl = document.getElementById('breathe-resonance-time');
+  const vagalGainEl = document.getElementById('breathe-vagal-gain');
+
+  if (scoreEl) scoreEl.textContent = coherenceScore;
+
+  if (badgeEl) {
+    badgeEl.className = 'breathe-coherence-badge';
+    if (coherenceScore >= 75) {
+      badgeEl.classList.add('high');
+      badgeEl.textContent = 'HIGH RESONANCE (0.1 Hz)';
+    } else if (coherenceScore >= 50) {
+      badgeEl.classList.add('med');
+      badgeEl.textContent = 'MODERATE COHERENCE';
+    } else {
+      badgeEl.classList.add('low');
+      badgeEl.textContent = 'CALIBRATING PACING';
+    }
+  }
+
+  if (barEl) {
+    barEl.style.width = `${coherenceScore}%`;
+  }
+
+  if (resTimeEl) {
+    const resSecs = Math.floor(breatheState.resonanceSeconds);
+    const m = Math.floor(resSecs / 60);
+    const s = resSecs % 60;
+    resTimeEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+
+  if (vagalGainEl) {
+    const gainPct = Math.min(65, Math.round((breatheState.resonanceSeconds / Math.max(1, breatheState.elapsedSeconds)) * 25 + (breatheState.elapsedSeconds / 60) * 3));
+    breatheState.vagalGainPct = gainPct;
+    vagalGainEl.textContent = `+${gainPct}%`;
+  }
+}
+
+function drawBreatheCanvas(timestamp) {
+  const canvas = document.getElementById('breathe-canvas');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || 460;
+  const height = canvas.clientHeight || 460;
+
+  if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+  }
+
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, width, height);
+
+  const cx = width / 2;
+  const cy = height / 2;
+
+  // Background Cosmic Glow
+  const bgGrad = ctx.createRadialGradient(cx, cy, 20, cx, cy, width * 0.48);
+  bgGrad.addColorStop(0, 'rgba(16, 26, 44, 0.4)');
+  bgGrad.addColorStop(0.7, 'rgba(11, 14, 20, 0.85)');
+  bgGrad.addColorStop(1, 'rgba(8, 10, 15, 0.98)');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Sacred Geometry: 6-fold Torus / Flower of Life Background Matrix
+  breatheState.torusAngle += 0.0006;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(breatheState.torusAngle);
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.07)';
+  ctx.lineWidth = 1;
+
+  const sacredRadius = 75;
+  for (let i = 0; i < 6; i++) {
+    const a = (i * Math.PI) / 3;
+    const sx = Math.cos(a) * sacredRadius;
+    const sy = Math.sin(a) * sacredRadius;
+    ctx.beginPath();
+    ctx.arc(sx, sy, sacredRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.arc(0, 0, sacredRadius * 2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Cosmic Starfield Particles
+  if (breatheState.starfield) {
+    const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+    const currentPhase = proto.phases[breatheState.phaseIndex];
+    const isExhale = currentPhase.name === 'EXHALE';
+
+    breatheState.particles.forEach(p => {
+      p.angle += p.orbitSpeed;
+      if (breatheState.active) {
+        p.distance += isExhale ? p.speed * 20 : -p.speed * 20;
+        if (p.distance < 25) p.distance = 180;
+        if (p.distance > 210) p.distance = 35;
+      }
+
+      const px = cx + Math.cos(p.angle) * p.distance;
+      const py = cy + Math.sin(p.angle) * p.distance;
+
+      ctx.beginPath();
+      ctx.arc(px, py, p.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(0, 240, 255, ${p.alpha * 0.7})`;
+      ctx.fill();
+    });
+  }
+
+  // Calculate Breath Progress (0 to 1 with smooth cubic ease)
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  const currentPhase = proto.phases[breatheState.phaseIndex];
+  const linearProgress = Math.min(1, Math.max(0, breatheState.phaseElapsed / currentPhase.duration));
+  // Smooth sinusoidal ease
+  const eased = 0.5 - 0.5 * Math.cos(linearProgress * Math.PI);
+
+  const currentRadius = currentPhase.baseRadius + (currentPhase.targetRadius - currentPhase.baseRadius) * eased;
+  const phaseColor = currentPhase.color;
+
+  // Outer Radiating Corona Aura
+  const auraGlow = ctx.createRadialGradient(cx, cy, currentRadius * 0.4, cx, cy, currentRadius * 1.5);
+  auraGlow.addColorStop(0, `${phaseColor}44`);
+  auraGlow.addColorStop(0.5, `${phaseColor}15`);
+  auraGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, currentRadius * 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = auraGlow;
+  ctx.fill();
+
+  // Pulsating Concentric Interference Rings
+  const ringCount = 4;
+  for (let r = 1; r <= ringCount; r++) {
+    const ringRadius = currentRadius * (0.3 + (r / ringCount) * 0.7);
+    const ringAlpha = (1 - r / (ringCount + 1)) * 0.4;
+    ctx.beginPath();
+    ctx.arc(cx, cy, ringRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = `${phaseColor}${Math.round(ringAlpha * 255).toString(16).padStart(2, '0')}`;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+
+  // Central Sacred Geometry Core Orb
+  const orbGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, currentRadius);
+  orbGrad.addColorStop(0, '#FFFFFF');
+  orbGrad.addColorStop(0.2, phaseColor);
+  orbGrad.addColorStop(0.7, `${phaseColor}55`);
+  orbGrad.addColorStop(1, 'rgba(10, 14, 22, 0.2)');
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
+  ctx.fillStyle = orbGrad;
+  ctx.fill();
+
+  // Brilliant Outer Boundary Ring with Coherence Glow
+  ctx.beginPath();
+  ctx.arc(cx, cy, currentRadius, 0, Math.PI * 2);
+  ctx.strokeStyle = phaseColor;
+  ctx.lineWidth = 2.5;
+  ctx.shadowColor = phaseColor;
+  ctx.shadowBlur = 18;
+  ctx.stroke();
+  ctx.shadowBlur = 0; // reset shadow
+
+  // Outer Progress Track (Session Completion Progress Arc)
+  if (breatheState.targetDurationSeconds > 0) {
+    const trackRadius = Math.min(cx, cy) - 14;
+    const progressFraction = Math.min(1, breatheState.elapsedSeconds / breatheState.targetDurationSeconds);
+
+    // Track Background
+    ctx.beginPath();
+    ctx.arc(cx, cy, trackRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // Active Progress Arc
+    if (progressFraction > 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, trackRadius, -Math.PI / 2, -Math.PI / 2 + progressFraction * Math.PI * 2);
+      ctx.strokeStyle = '#00F0FF';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+/* ==========================================================================
+   SESSION COMPLETION & DATABASE PERSISTENCE
+   ========================================================================== */
+
+async function finishBreatheSession(autoCompleted = false) {
+  if (!breatheState.active && breatheState.elapsedSeconds < 10) return;
+
+  breatheState.active = false;
+  breatheState.paused = false;
+
+  // Calculate statistics
+  const proto = BREATHE_PROTOCOLS[breatheState.protocolKey] || BREATHE_PROTOCOLS.resonance;
+  const avgCoherence = breatheState.coherenceScores.length
+    ? Math.round(breatheState.coherenceScores.reduce((a, b) => a + b, 0) / breatheState.coherenceScores.length)
+    : 65;
+
+  const currentHr = bleState.connected && bleState.liveBpm > 0 ? bleState.liveBpm : 65;
+  breatheState.endHr = currentHr;
+
+  const payload = {
+    protocol: breatheState.protocolKey,
+    protocol_name: proto.name,
+    duration_seconds: Math.round(breatheState.elapsedSeconds),
+    avg_coherence: avgCoherence,
+    peak_coherence: breatheState.peakCoherence,
+    resonance_seconds: Math.round(breatheState.resonanceSeconds),
+    vagal_gain_pct: breatheState.vagalGainPct || 15,
+    start_hr: breatheState.startHr || 72,
+    end_hr: breatheState.endHr,
+    cycles_completed: breatheState.cycleCount
+  };
+
+  // Play gentle completion sound
+  playBiofeedbackChime('HOLD');
+
+  try {
+    const res = await fetch('/api/biofeedback/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      loadBreatheHistory();
+    }
+  } catch (err) {
+    console.error('Failed to save biofeedback session:', err);
+  }
+
+  // Reset controls UI
+  const btnStart = document.getElementById('btn-breathe-start');
+  const btnStartLabel = document.getElementById('btn-breathe-start-label');
+  const btnPause = document.getElementById('btn-breathe-pause');
+  const hudInst = document.getElementById('breathe-guide-instruction');
+
+  if (btnStart) btnStart.style.background = 'linear-gradient(135deg, #00F0FF 0%, #00F076 100%)';
+  if (btnStartLabel) btnStartLabel.textContent = '▶ Begin Biofeedback Session';
+  if (btnPause) btnPause.disabled = true;
+
+  if (hudInst) {
+    hudInst.textContent = `Session Complete! Avg Coherence: ${avgCoherence}% • Vagal Gain: +${payload.vagal_gain_pct}%`;
+  }
+}
+
+async function loadBreatheHistory() {
+  const tbody = document.getElementById('breathe-history-tbody');
+  if (!tbody) return;
+
+  try {
+    const res = await fetch('/api/biofeedback/sessions?limit=15');
+    if (!res.ok) return;
+
+    const data = await res.json();
+    if (!data.sessions || !data.sessions.length) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-muted text-center" style="padding: 18px;">
+            No biofeedback sessions logged yet. Select a protocol and click "Begin Biofeedback Session" above!
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    tbody.innerHTML = data.sessions.map(s => {
+      const mins = Math.floor((s.duration_seconds || 0) / 60);
+      const secs = (s.duration_seconds || 0) % 60;
+      const durStr = `${mins}m ${secs}s`;
+      const dateStr = (s.timestamp || s.date || '').slice(0, 16).replace('T', ' ');
+      const hrDelta = (s.end_hr && s.start_hr) ? (s.end_hr - s.start_hr) : 0;
+      const hrDeltaText = hrDelta <= 0 ? `${hrDelta} bpm (Cooling)` : `+${hrDelta} bpm`;
+
+      return `
+        <tr>
+          <td style="color:var(--text-secondary);font-size:11px;">${dateStr}</td>
+          <td style="font-weight:700;color:#FFFFFF;">${s.protocol_name || s.protocol}</td>
+          <td><span style="color:#00F0FF;font-weight:600;">${durStr}</span></td>
+          <td>
+            <span style="color:#00F076;font-weight:700;">${s.avg_coherence || 0}%</span>
+          </td>
+          <td style="color:var(--text-secondary);">${s.peak_coherence || s.avg_coherence || 0}%</td>
+          <td>${Math.round(s.resonance_seconds || 0)}s</td>
+          <td><span style="color:#00F076;font-weight:700;">+${s.vagal_gain_pct || 0}%</span></td>
+          <td style="color:${hrDelta <= 0 ? '#00F076' : '#FBBF24'};">${hrDeltaText}</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Failed to load biofeedback history:', err);
+  }
 }
 

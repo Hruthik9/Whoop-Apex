@@ -299,14 +299,21 @@ class DB {
     return list.slice(-limit).reverse();
   }
 
-  saveBleSession(session) {
-    if (!this.data.ble_sessions) this.data.ble_sessions = [];
+  // HRV Resonance Biofeedback Sessions
+  getBreathingSessions(limit = 50) {
+    const data = this.load();
+    const list = data.breathing_sessions || [];
+    return list.slice(-limit).reverse();
+  }
+
+  saveBreathingSession(session) {
+    if (!this.data.breathing_sessions) this.data.breathing_sessions = [];
     const record = {
-      id: `ble_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: `breathe_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       timestamp: new Date().toISOString(),
       ...session
     };
-    this.data.ble_sessions.push(record);
+    this.data.breathing_sessions.push(record);
     this.save();
     return record;
   }
