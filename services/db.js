@@ -272,6 +272,44 @@ class DB {
     this.save();
     return this.data.habit_logs[date];
   }
+
+  // Smart Rep Counter Sessions
+  getRepWorkouts(limit = 50) {
+    const data = this.load();
+    const list = data.rep_workouts || [];
+    return list.slice(-limit).reverse();
+  }
+
+  saveRepWorkout(workout) {
+    if (!this.data.rep_workouts) this.data.rep_workouts = [];
+    const session = {
+      id: `rep_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      ...workout
+    };
+    this.data.rep_workouts.push(session);
+    this.save();
+    return session;
+  }
+
+  // Offline BLE Recorded Sessions
+  getBleSessions(limit = 30) {
+    const data = this.load();
+    const list = data.ble_sessions || [];
+    return list.slice(-limit).reverse();
+  }
+
+  saveBleSession(session) {
+    if (!this.data.ble_sessions) this.data.ble_sessions = [];
+    const record = {
+      id: `ble_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      timestamp: new Date().toISOString(),
+      ...session
+    };
+    this.data.ble_sessions.push(record);
+    this.save();
+    return record;
+  }
 }
 
 module.exports = new DB();

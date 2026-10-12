@@ -73,6 +73,9 @@
         <button class="nav-tab-pill" data-tab="insights" id="tab-btn-insights">
           <span>Deep Insights</span>
         </button>
+        <button class="nav-tab-pill" data-tab="replab" id="tab-btn-replab">
+          <span>Rep Lab & BLE</span>
+        </button>
       </nav>
 
       <!-- Shell Right Controls -->
@@ -1291,6 +1294,364 @@
         <div id="di-roadmap"></div>
       </div>
     </div>
+
+    <!-- Smart Rep Counter & Offline BLE Lab -->
+    <div class="tab-pane" id="pane-replab">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">SMART REP LAB & OFFLINE BLE ENGINE</h2>
+          <p class="section-desc">Real-time Bluetooth Low Energy strap streaming + Accelerometer & Computer Vision exercise rep detection</p>
+        </div>
+      </div>
+
+      <!-- ROW 1: Bluetooth Low Energy Hardware Cockpit -->
+      <section class="replab-section-card" id="ble-cockpit-card">
+        <div class="replab-card-header">
+          <div class="replab-title-group">
+            <span class="replab-badge badge-ble">BLUETOOTH LOW ENERGY (BLE)</span>
+            <h3 class="replab-title">Hardware Telemetry & Offline Stream</h3>
+          </div>
+          <div class="replab-action-group">
+            <button type="button" id="btn-ble-simulate" class="btn btn-secondary btn-sm" title="Toggle Virtual BLE Strap for testing without hardware">
+              <span id="btn-ble-sim-label">🧪 Test Simulator</span>
+            </button>
+            <button type="button" id="btn-ble-connect" class="btn btn-primary btn-sm">
+              <span id="btn-ble-connect-icon">⚡</span>
+              <span id="btn-ble-connect-label">Pair BLE Strap</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="replab-desc">
+          Pairs directly with your <b>WHOOP 4.0 / 5.0 strap</b> (via Heart Rate Service <code class="code-pill">0x180D</code> & Battery <code class="code-pill">0x180F</code>), <b>Polar H10/Verity Sense</b>, or any standard Bluetooth heart-rate monitor. Works <b>100% offline</b> right in the browser with zero cloud or account required.
+        </p>
+
+        <!-- BLE Telemetry Grid -->
+        <div class="ble-stat-grid">
+          <div class="ble-stat-tile">
+            <div class="ble-stat-label">DEVICE STATUS</div>
+            <div class="ble-stat-value text-muted" id="ble-device-name">Disconnected</div>
+            <div class="ble-stat-sub" id="ble-connection-status"><span class="ble-dot dot-off"></span> Offline / Idle</div>
+          </div>
+          <div class="ble-stat-tile">
+            <div class="ble-stat-label">STRAP BATTERY</div>
+            <div class="ble-stat-value" id="ble-battery-pct">-- %</div>
+            <div class="ble-meter-bar"><div class="ble-meter-fill" id="ble-battery-fill" style="width: 0%;"></div></div>
+          </div>
+          <div class="ble-stat-tile tile-heart">
+            <div class="ble-stat-label">LIVE HEART RATE</div>
+            <div class="ble-stat-value text-bpm" id="ble-live-bpm">-- <span class="unit">BPM</span></div>
+            <div class="ble-stat-sub" id="ble-live-zone">Zone -- (Resting)</div>
+          </div>
+          <div class="ble-stat-tile">
+            <div class="ble-stat-label">LIVE HRV (RMSSD)</div>
+            <div class="ble-stat-value text-cyan" id="ble-live-rmssd">-- <span class="unit">ms</span></div>
+            <div class="ble-stat-sub" id="ble-live-rr">R-R Interval: -- ms</div>
+          </div>
+          <div class="ble-stat-tile">
+            <div class="ble-stat-label">EFFORT / TRIMP</div>
+            <div class="ble-stat-value text-amber" id="ble-live-trimp">0.0 <span class="unit">/ 100</span></div>
+            <div class="ble-stat-sub" id="ble-session-kcal">Est. 0 active kcal</div>
+          </div>
+        </div>
+
+        <!-- Live ECG / Photoplethysmography Waveform Canvas -->
+        <div class="ble-waveform-wrapper">
+          <div class="waveform-overlay-meta">
+            <span class="waveform-tag">LIVE PPG / ECG RHYTHM</span>
+            <span class="waveform-rate" id="waveform-bpm-tag">0 BPM</span>
+          </div>
+          <canvas id="ble-ecg-canvas" width="900" height="110" aria-label="Live ECG Waveform"></canvas>
+        </div>
+
+        <!-- Offline Recording Control Bar -->
+        <div class="ble-recorder-bar">
+          <div class="recorder-left">
+            <button type="button" id="btn-ble-record" class="btn btn-record">
+              <span class="record-pulse-icon"></span>
+              <span id="btn-ble-record-label">Start Offline Recording</span>
+            </button>
+            <div class="recorder-timer-group">
+              <span class="recorder-time-label">SESSION:</span>
+              <span class="recorder-timer" id="ble-record-timer">00:00:00</span>
+              <span class="recorder-samples" id="ble-record-samples">(0 samples recorded)</span>
+            </div>
+          </div>
+          <div class="recorder-actions">
+            <button type="button" id="btn-ble-export-csv" class="btn btn-secondary btn-xs" disabled title="Export current recording as CSV">
+              <span>📥 Export CSV</span>
+            </button>
+            <button type="button" id="btn-ble-export-json" class="btn btn-secondary btn-xs" disabled title="Export current recording as JSON">
+              <span>💾 Export JSON</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ROW 2: Smart Rep Counter & Motion Studio -->
+      <section class="replab-section-card" id="rep-studio-card" style="margin-top: 24px;">
+        <div class="replab-card-header">
+          <div class="replab-title-group">
+            <span class="replab-badge badge-reps">INTELLIGENT KINEMATICS</span>
+            <h3 class="replab-title">Smart Rep Counter & Exercise Studio</h3>
+          </div>
+          <div class="replab-mode-pills" role="group" aria-label="Rep Detection Mode">
+            <button type="button" class="rep-mode-pill active" data-mode="motion" id="btn-mode-motion" title="Use Phone Accelerometer Sensor (place on chest/pocket/wrist)">
+              <span>📱 Motion Sensor</span>
+            </button>
+            <button type="button" class="rep-mode-pill" data-mode="vision" id="btn-mode-vision" title="Use Front Camera Optical Motion Tracking">
+              <span>📷 AI Camera Vision</span>
+            </button>
+            <button type="button" class="rep-mode-pill" data-mode="manual" id="btn-mode-manual" title="Manual Spacebar or Click Tap Pacer">
+              <span>⚡ Tap Pacer</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="replab-desc">
+          Automated kinematic repetition tracking with real-time inflection detection, audio feedback, and haptic cues. Choose your exercise to calibrate peak thresholds and target muscle hypertrophy.
+        </p>
+
+        <!-- Exercise Carousel Selector -->
+        <div class="exercise-pill-carousel" id="exercise-pill-carousel" role="tablist">
+          <button type="button" class="ex-pill active" data-ex="pushups">
+            <span class="ex-icon">💪</span>
+            <span class="ex-name">Push-ups</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="squats">
+            <span class="ex-icon">🦵</span>
+            <span class="ex-name">Squats</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="pullups">
+            <span class="ex-icon">🦅</span>
+            <span class="ex-name">Pull-ups</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="bicep_curls">
+            <span class="ex-icon">🔥</span>
+            <span class="ex-name">Bicep Curls</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="bench_press">
+            <span class="ex-icon">🏋️</span>
+            <span class="ex-name">Dumbbell Bench</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="shoulder_press">
+            <span class="ex-icon">⚡</span>
+            <span class="ex-name">Shoulder Press</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="dips">
+            <span class="ex-icon">💥</span>
+            <span class="ex-name">Dips</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="lunges">
+            <span class="ex-icon">🏃</span>
+            <span class="ex-name">Lunges</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="crunches">
+            <span class="ex-icon">🍫</span>
+            <span class="ex-name">Crunches</span>
+          </button>
+          <button type="button" class="ex-pill" data-ex="jumping_jacks">
+            <span class="ex-icon">⭐</span>
+            <span class="ex-name">Jumping Jacks</span>
+          </button>
+        </div>
+
+        <!-- Exercise Target Metadata Banner -->
+        <div class="ex-target-meta" id="ex-target-meta">
+          <div class="ex-meta-item">
+            <span class="ex-meta-k">TARGET EXERCISE:</span>
+            <span class="ex-meta-v" id="rep-ex-title">Push-ups (Standard)</span>
+          </div>
+          <div class="ex-meta-item">
+            <span class="ex-meta-k">PRIMARY MUSCLE:</span>
+            <span class="ex-meta-badge" id="rep-primary-muscle">Pectoralis Major & Triceps</span>
+          </div>
+          <div class="ex-meta-item">
+            <span class="ex-meta-k">SECONDARY:</span>
+            <span class="ex-meta-v text-muted" id="rep-secondary-muscle">Anterior Deltoids, Core</span>
+          </div>
+          <div class="ex-meta-item">
+            <span class="ex-meta-k">SENSOR ORIENTATION:</span>
+            <span class="ex-meta-v" id="rep-sensor-guidance">Place phone under chest on floor, or in arm-strap</span>
+          </div>
+        </div>
+
+        <!-- Two Column Interactive Rep Studio -->
+        <div class="rep-studio-workspace">
+          <!-- Left Column: Interactive Viewport (Sensor Oscilloscope / Camera Feed / Tap Target) -->
+          <div class="rep-viewport-panel">
+            <!-- Mode A: Accelerometer Sensor Oscilloscope Viewport -->
+            <div class="rep-viewport-container" id="viewport-motion">
+              <div class="viewport-header">
+                <span class="viewport-title">📱 3-AXIS ACCELEROMETER SPECTRUM</span>
+                <span class="sensor-rate" id="sensor-hz-tag">50 Hz ACTIVE</span>
+              </div>
+              <canvas id="rep-sensor-canvas" width="460" height="230"></canvas>
+              <div class="sensor-instruction-bar" id="sensor-instruction-bar">
+                <span class="sens-tip-icon">💡</span>
+                <span id="sensor-instruction-text">Tap "Activate Motion Sensor" then place device in training position. Move through full range of motion.</span>
+              </div>
+              <button type="button" id="btn-activate-motion" class="btn btn-secondary btn-sm" style="margin-top: 10px; width: 100%;">
+                <span>📲 Start Motion Accelerometer</span>
+              </button>
+            </div>
+
+            <!-- Mode B: Computer Vision Camera Viewport -->
+            <div class="rep-viewport-container hidden" id="viewport-vision">
+              <div class="viewport-header">
+                <span class="viewport-title">📷 OPTICAL MOTION FLOW TRACKER</span>
+                <span class="camera-status" id="camera-status-tag">STANDBY</span>
+              </div>
+              <div class="camera-feed-box">
+                <video id="rep-camera-video" playsinline autoplay muted width="460" height="230"></video>
+                <canvas id="rep-camera-canvas" width="460" height="230"></canvas>
+                <div class="camera-reticle"></div>
+              </div>
+              <div class="camera-controls-bar">
+                <button type="button" id="btn-toggle-camera" class="btn btn-primary btn-sm" style="flex: 1;">
+                  <span id="btn-toggle-cam-label">📹 Start Camera Tracker</span>
+                </button>
+                <button type="button" id="btn-switch-camera" class="btn btn-secondary btn-sm" title="Flip front / back camera">
+                  <span>🔄 Flip Cam</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Mode C: Manual / Tap Viewport -->
+            <div class="rep-viewport-container hidden" id="viewport-manual">
+              <div class="viewport-header">
+                <span class="viewport-title">⚡ CADENCE & TAP TRACKER</span>
+                <span>KEYBOARD: [SPACEBAR]</span>
+              </div>
+              <div class="manual-tap-pad" id="rep-tap-zone" tabindex="0">
+                <div class="tap-ring"></div>
+                <div class="tap-label">TAP FOR REP</div>
+                <div class="tap-hint">or press Spacebar during training</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Giant Holographic Rep Counter Dial & Set Controls -->
+          <div class="rep-counter-panel">
+            <div class="rep-dial-card">
+              <!-- Animated Rep Ring Dial -->
+              <div class="rep-dial-ring-wrap">
+                <svg class="rep-dial-svg" viewBox="0 0 200 200" width="190" height="190">
+                  <circle class="rep-dial-bg" cx="100" cy="100" r="85"></circle>
+                  <circle class="rep-dial-progress" id="rep-dial-circle" cx="100" cy="100" r="85" stroke-dasharray="534" stroke-dashoffset="534"></circle>
+                </svg>
+                <div class="rep-dial-center">
+                  <span class="rep-number" id="rep-count-display">0</span>
+                  <span class="rep-unit-label">REPS</span>
+                  <span class="rep-phase-badge badge-ready" id="rep-phase-badge">READY</span>
+                </div>
+              </div>
+
+              <!-- Set & Target Controls -->
+              <div class="rep-config-row">
+                <div class="rep-config-item">
+                  <label for="rep-target-input">TARGET REPS</label>
+                  <input type="number" id="rep-target-input" value="12" min="1" max="100" class="rep-mini-input">
+                </div>
+                <div class="rep-config-item">
+                  <label for="rep-weight-input">WEIGHT (KG)</label>
+                  <input type="number" id="rep-weight-input" value="0" min="0" step="0.5" class="rep-mini-input" placeholder="0 = bodyweight">
+                </div>
+                <div class="rep-config-item">
+                  <label for="rep-set-num">SET</label>
+                  <div class="set-stepper">
+                    <button type="button" class="stepper-btn" id="btn-set-dec">-</button>
+                    <span id="rep-current-set" style="font-weight:700; min-width:18px; text-align:center;">1</span>
+                    <button type="button" class="stepper-btn" id="btn-set-inc">+</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Real-time Tempo & Form Readouts -->
+              <div class="rep-tempo-bar">
+                <div class="tempo-stat"><span class="tempo-label">TEMPO:</span> <span class="tempo-val" id="rep-tempo-display">2.0s eccentric • 1.0s concentric</span></div>
+                <div class="tempo-stat"><span class="tempo-label">PACE:</span> <span class="tempo-val" id="rep-pace-display">0 reps/min</span></div>
+              </div>
+
+              <!-- Audio & Haptics Toggles -->
+              <div class="rep-feedback-toggles">
+                <label class="toggle-chip active" id="toggle-chip-sound">
+                  <input type="checkbox" id="rep-sound-toggle" checked>
+                  <span>🔔 Audio Chime</span>
+                </label>
+                <label class="toggle-chip active" id="toggle-chip-haptic">
+                  <input type="checkbox" id="rep-haptic-toggle" checked>
+                  <span>📳 Haptic Pulse</span>
+                </label>
+              </div>
+
+              <!-- Set Execution Actions -->
+              <div class="rep-actions-bar">
+                <button type="button" id="btn-rep-reset-count" class="btn btn-secondary btn-sm" title="Reset current set rep count to 0">
+                  <span>🔄 Reset</span>
+                </button>
+                <button type="button" id="btn-rep-complete-set" class="btn btn-primary" style="flex: 1;">
+                  <span>✅ Complete Set</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Rest Timer Widget (Auto-starts on Set Completion) -->
+            <div class="rep-rest-card" id="rep-rest-card">
+              <div class="rest-card-header">
+                <span class="rest-title">⏱️ REST INTERVAL TIMER</span>
+                <button type="button" id="btn-rest-skip" class="btn-rest-skip">Skip &rarr;</button>
+              </div>
+              <div class="rest-timer-dial-row">
+                <div class="rest-clock" id="rep-rest-clock">01:00</div>
+                <div class="rest-presets" role="group">
+                  <button type="button" class="rest-pill" data-rest="30">30s</button>
+                  <button type="button" class="rest-pill active" data-rest="60">60s</button>
+                  <button type="button" class="rest-pill" data-rest="90">90s</button>
+                  <button type="button" class="rest-pill" data-rest="120">120s</button>
+                </div>
+              </div>
+              <div class="rest-bar-track"><div class="rest-bar-fill" id="rep-rest-fill" style="width: 100%;"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session Summary & Save To Hypertrophy Lab -->
+        <div class="rep-session-footer">
+          <div class="session-stats-rollup">
+            <div class="rollup-item"><span class="rollup-k">TOTAL REPS:</span> <span class="rollup-v" id="rollup-total-reps">0</span></div>
+            <div class="rollup-item"><span class="rollup-k">SETS COMPLETED:</span> <span class="rollup-v" id="rollup-total-sets">0</span></div>
+            <div class="rollup-item"><span class="rollup-k">VOLUME LOAD:</span> <span class="rollup-v" id="rollup-total-volume">0 kg</span></div>
+            <div class="rollup-item"><span class="rollup-k">MUSCLE STIMULUS:</span> <span class="rollup-v text-cyan" id="rollup-muscle-tag">Chest & Triceps</span></div>
+          </div>
+          <button type="button" id="btn-rep-sync-hypertrophy" class="btn btn-primary">
+            <span>🧬 Sync Workout to Hypertrophy Lab</span>
+          </button>
+        </div>
+
+        <!-- Recent Rep Workout History -->
+        <div class="rep-history-section" style="margin-top: 24px;">
+          <h4 class="rep-history-title">RECENT KINEMATIC WORKOUT SESSIONS</h4>
+          <div class="rep-history-table-wrap">
+            <table class="rep-table" id="rep-history-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Exercise</th>
+                  <th>Sets & Reps</th>
+                  <th>Weight</th>
+                  <th>Target Muscle</th>
+                  <th>Est. TRIMP</th>
+                </tr>
+              </thead>
+              <tbody id="rep-history-tbody">
+                <tr><td colspan="6" class="text-muted text-center" style="padding: 16px;">No rep sessions logged yet. Pick an exercise and start pumping!</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
   </div> <!-- /dashboard-shell -->
 
   <!-- Modal: Habit Library & Custom Tracker -->
@@ -1537,6 +1898,10 @@
     <button class="bottom-dock-tab" data-tab="insights" id="dock-btn-insights" aria-label="Deep Insights">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
       <span>Insights</span>
+    </button>
+    <button class="bottom-dock-tab" data-tab="replab" id="dock-btn-replab" aria-label="Rep Lab & BLE">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 4v16"/><path d="M18 4v16"/><path d="M2 9h4"/><path d="M18 9h4"/><path d="M2 15h4"/><path d="M18 15h4"/><path d="M6 12h12"/></svg>
+      <span>Rep Lab</span>
     </button>
   </nav>
 

@@ -107,6 +107,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadHypertrophyData();
   await loadAICoachInsights();
   initDeepInsights();
+  initBleManager();
+  initRepCounterStudio();
   initPacerEngine('sigh');
   initPwaController();
 });
@@ -3157,3 +3159,1288 @@ function renderDeepInsights(d) {
       <p class="di-disclaimer">${rm.disclaimer || ''}</p>`;
   }
 }
+
+// ===========================================================================
+// BLUETOOTH LOW ENERGY (BLE) OFFLINE HARDWARE ENGINE
+// ===========================================================================
+
+let bleState = {
+  device: null,
+  server: null,
+  hrChar: null,
+  batteryChar: null,
+  connected: false,
+  simulating: false,
+  simTimer: null,
+  liveBpm: 0,
+  rrHistory: [],
+  liveRmssd: 0,
+  trimpRaw: 0,
+  trimpScore: 0,
+  activeKcal: 0,
+  recording: false,
+  recordStartTime: 0,
+  recordSamples: [],
+  recordTimer: null,
+  ecgAnimId: null,
+  ecgPhase: 0,
+};
+
+function initBleManager() {
+  const btnConnect = document.getElementById('btn-ble-connect');
+  const btnSimulate = document.getElementById('btn-ble-simulate');
+  const btnRecord = document.getElementById('btn-ble-record');
+  const btnExportCsv = document.getElementById('btn-ble-export-csv');
+  const btnExportJson = document.getElementById('btn-ble-export-json');
+
+  if (btnConnect) btnConnect.addEventListener('click', toggleBleConnection);
+  if (btnSimulate) btnSimulate.addEventListener('click', toggleBleSimulation);
+  if (btnRecord) btnRecord.addEventListener('click', toggleBleRecording);
+  if (btnExportCsv) btnExportCsv.addEventListener('click', exportBleRecordingCsv);
+  if (btnExportJson) btnExportJson.addEventListener('click', exportBleRecordingJson);
+
+  initEcgCanvas();
+}
+
+async function toggleBleConnection() {
+  if (bleState.connected) {
+    disconnectBleDevice();
+    return;
+  }
+  if (!navigator.bluetooth) {
+    alert('Web Bluetooth API is not supported on this browser.\n\nPlease use Google Chrome, Microsoft Edge, or Android Chrome.\n(On iOS, use the Bluefy or WebBLE browser).\n\nIn the meantime, click "Test Simulator" to experience full offline telemetry!');
+    return;
+  }
+
+  const btnLabel = document.getElementById('btn-ble-connect-label');
+  if (btnLabel) btnLabel.textContent = 'Scanning...';
+
+  try {
+    let device;
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [
+          { services: ['heart_rate'] },
+          { namePrefix: 'WHOOP' },
+          { namePrefix: 'Polar' }
+        ],
+        optionalServices: ['battery_service', 'device_information']
+      });
+    } catch (filterErr) {
+      // Fallback: accept all Bluetooth devices with heart rate service
+      device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['heart_rate', 'battery_service', 'device_information']
+      });
+    }
+
+    if (!device) return;
+    bleState.device = device;
+    device.addEventListener('gattserverdisconnected', onBleDisconnected);
+
+    if (btnLabel) btnLabel.textContent = 'Connecting...';
+    const server = await device.gatt.connect();
+    bleState.server = server;
+
+    // 1. Connect to Heart Rate Service (0x180D)
+    try {
+      const hrService = await server.getPrimaryService('heart_rate');
+      const hrChar = await hrService.getCharacteristic('heart_rate_measurement');
+      bleState.hrChar = hrChar;
+      await hrChar.startNotifications();
+      hrChar.addEventListener('characteristicvaluechanged', onBleHeartRateMeasurement);
+    } catch (e) {
+      console.warn('Heart rate service connection warning:', e);
+    }
+
+    // 2. Connect to Battery Service (0x180F) if present
+    try {
+      const batteryService = await server.getPrimaryService('battery_service');
+      const batteryChar = await batteryService.getCharacteristic('battery_level');
+      bleState.batteryChar = batteryChar;
+      const initialBattery = await batteryChar.readValue();
+      updateBleBattery(initialBattery.getUint8(0));
+      await batteryChar.startNotifications();
+      batteryChar.addEventListener('characteristicvaluechanged', (evt) => {
+        updateBleBattery(evt.target.value.getUint8(0));
+      });
+    } catch (e) {
+      console.warn('Battery service not available on device:', e);
+    }
+
+    bleState.connected = true;
+    updateBleUiConnected(device.name || 'WHOOP / BLE Strap');
+  } catch (err) {
+    console.error('BLE connection error:', err);
+    if (btnLabel) btnLabel.textContent = 'Pair BLE Strap';
+  }
+}
+
+function disconnectBleDevice() {
+  if (bleState.simulating) {
+    stopBleSimulation();
+    return;
+  }
+  if (bleState.device && bleState.device.gatt.connected) {
+    bleState.device.gatt.disconnect();
+  }
+  onBleDisconnected();
+}
+
+function onBleDisconnected() {
+  bleState.connected = false;
+  bleState.device = null;
+  bleState.server = null;
+  bleState.hrChar = null;
+  bleState.batteryChar = null;
+  bleState.liveBpm = 0;
+
+  const nameEl = document.getElementById('ble-device-name');
+  const statusEl = document.getElementById('ble-connection-status');
+  const bpmEl = document.getElementById('ble-live-bpm');
+  const btnLabel = document.getElementById('btn-ble-connect-label');
+  const btnIcon = document.getElementById('btn-ble-connect-icon');
+  const wfBpm = document.getElementById('waveform-bpm-tag');
+
+  if (nameEl) nameEl.textContent = 'Disconnected';
+  if (statusEl) statusEl.innerHTML = '<span class="ble-dot dot-off"></span> Offline / Idle';
+  if (bpmEl) bpmEl.innerHTML = '-- <span class="unit">BPM</span>';
+  if (btnLabel) btnLabel.textContent = 'Pair BLE Strap';
+  if (btnIcon) btnIcon.textContent = '⚡';
+  if (wfBpm) wfBpm.textContent = '0 BPM';
+
+  if (bleState.recording) toggleBleRecording();
+}
+
+function updateBleUiConnected(name) {
+  const nameEl = document.getElementById('ble-device-name');
+  const statusEl = document.getElementById('ble-connection-status');
+  const btnLabel = document.getElementById('btn-ble-connect-label');
+  const btnIcon = document.getElementById('btn-ble-connect-icon');
+
+  if (nameEl) nameEl.textContent = name;
+  if (statusEl) statusEl.innerHTML = '<span class="ble-dot dot-connected"></span> Bonded & Streaming';
+  if (btnLabel) btnLabel.textContent = 'Disconnect';
+  if (btnIcon) btnIcon.textContent = '🔌';
+}
+
+function onBleHeartRateMeasurement(event) {
+  const dataView = event.target.value;
+  const flags = dataView.getUint8(0);
+  const rate16Bits = (flags & 0x1) !== 0;
+  let offset = 1;
+  let bpm = 0;
+
+  if (rate16Bits) {
+    bpm = dataView.getUint16(offset, /*littleEndian=*/true);
+    offset += 2;
+  } else {
+    bpm = dataView.getUint8(offset);
+    offset += 1;
+  }
+
+  // Energy Expended check (bit 3)
+  const energyExpendedPresent = (flags & 0x8) !== 0;
+  if (energyExpendedPresent) offset += 2;
+
+  // RR-Intervals check (bit 4)
+  const rrPresent = (flags & 0x10) !== 0;
+  const rrIntervals = [];
+  if (rrPresent) {
+    while (offset + 1 < dataView.byteLength) {
+      const rawRr = dataView.getUint16(offset, true);
+      const rrMs = Math.round((rawRr / 1024) * 1000); // 1/1024 s to ms
+      if (rrMs >= 300 && rrMs <= 2000) rrIntervals.push(rrMs);
+      offset += 2;
+    }
+  }
+
+  processBleHeartRate(bpm, rrIntervals);
+}
+
+function processBleHeartRate(bpm, rrIntervals = []) {
+  if (bpm <= 0 || bpm > 240) return;
+  bleState.liveBpm = bpm;
+
+  // 1. Update R-R and compute rolling RMSSD (ms)
+  if (rrIntervals.length > 0) {
+    rrIntervals.forEach(rr => bleState.rrHistory.push(rr));
+    if (bleState.rrHistory.length > 30) bleState.rrHistory = bleState.rrHistory.slice(-30);
+
+    const diffs = [];
+    for (let i = 1; i < bleState.rrHistory.length; i++) {
+      const diff = bleState.rrHistory[i] - bleState.rrHistory[i - 1];
+      diffs.push(diff * diff);
+    }
+    if (diffs.length > 0) {
+      const meanSquare = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+      bleState.liveRmssd = Math.round(Math.sqrt(meanSquare));
+    }
+  }
+
+  // 2. Zone & TRIMP Calculation
+  const maxHr = (state.user && state.user.body && state.user.body.max_heart_rate) || 190;
+  const rhr = (state.latest && state.latest.recovery && state.latest.recovery.resting_heart_rate) || 60;
+  const hrReserve = Math.max(30, maxHr - rhr);
+  const pctHrr = Math.min(100, Math.max(0, ((bpm - rhr) / hrReserve) * 100));
+
+  let zoneNum = 1, zoneName = 'Zone 1 (Active Recovery)';
+  let zoneWeight = 1;
+  if (pctHrr >= 90) { zoneNum = 5; zoneName = 'Zone 5 (Max Anaerobic)'; zoneWeight = 5; }
+  else if (pctHrr >= 80) { zoneNum = 4; zoneName = 'Zone 4 (Threshold)'; zoneWeight = 4; }
+  else if (pctHrr >= 70) { zoneNum = 3; zoneName = 'Zone 3 (Aerobic)'; zoneWeight = 3; }
+  else if (pctHrr >= 60) { zoneNum = 2; zoneName = 'Zone 2 (Mitochondrial)'; zoneWeight = 2; }
+
+  // TRIMP Accumulation (Edwards model log compressed to 0-100)
+  bleState.trimpRaw += (zoneWeight * (1 / 60)); // per second TRIMP
+  const D = 7201;
+  bleState.trimpScore = Math.min(100, Math.round((100 * Math.log(bleState.trimpRaw + 1) / Math.log(D)) * 10) / 10);
+  bleState.activeKcal += Math.round((bpm / 60) * 0.14 * 10) / 10;
+
+  // 3. Update UI elements
+  const bpmEl = document.getElementById('ble-live-bpm');
+  const zoneEl = document.getElementById('ble-live-zone');
+  const rmssdEl = document.getElementById('ble-live-rmssd');
+  const rrEl = document.getElementById('ble-live-rr');
+  const trimpEl = document.getElementById('ble-live-trimp');
+  const kcalEl = document.getElementById('ble-session-kcal');
+  const wfBpm = document.getElementById('waveform-bpm-tag');
+
+  if (bpmEl) bpmEl.innerHTML = `${bpm} <span class="unit">BPM</span>`;
+  if (zoneEl) zoneEl.textContent = `${zoneName} • ${Math.round(pctHrr)}% HRR`;
+  if (rmssdEl) rmssdEl.innerHTML = `${bleState.liveRmssd || '--'} <span class="unit">ms</span>`;
+  if (rrEl && rrIntervals.length) rrEl.textContent = `R-R Interval: ${rrIntervals[rrIntervals.length - 1]} ms`;
+  if (trimpEl) trimpEl.innerHTML = `${bleState.trimpScore.toFixed(1)} <span class="unit">/ 100</span>`;
+  if (kcalEl) kcalEl.textContent = `Est. ${Math.round(bleState.activeKcal)} active kcal`;
+  if (wfBpm) wfBpm.textContent = `${bpm} BPM`;
+
+  // 4. Record sample if session is active
+  if (bleState.recording) {
+    bleState.recordSamples.push({
+      timestamp: new Date().toISOString(),
+      bpm,
+      rmssd: bleState.liveRmssd,
+      zone: zoneNum,
+      trimp: bleState.trimpScore
+    });
+    const samplesCountEl = document.getElementById('ble-record-samples');
+    if (samplesCountEl) samplesCountEl.textContent = `(${bleState.recordSamples.length} samples recorded)`;
+  }
+}
+
+function updateBleBattery(pct) {
+  const batEl = document.getElementById('ble-battery-pct');
+  const fillEl = document.getElementById('ble-battery-fill');
+  if (batEl) batEl.textContent = `${pct}%`;
+  if (fillEl) fillEl.style.width = `${pct}%`;
+}
+
+// Virtual Simulator
+function toggleBleSimulation() {
+  if (bleState.simulating) {
+    stopBleSimulation();
+  } else {
+    startBleSimulation();
+  }
+}
+
+function startBleSimulation() {
+  if (bleState.connected) disconnectBleDevice();
+  bleState.simulating = true;
+  bleState.liveBpm = 72;
+  updateBleUiConnected('Virtual WHOOP 5.0 (Simulator)');
+
+  const statusEl = document.getElementById('ble-connection-status');
+  if (statusEl) statusEl.innerHTML = '<span class="ble-dot dot-sim"></span> Virtual Test Bench Active';
+  const btnSimLabel = document.getElementById('btn-ble-sim-label');
+  if (btnSimLabel) btnSimLabel.textContent = '⏹ Stop Simulator';
+
+  updateBleBattery(88);
+
+  let angle = 0;
+  bleState.simTimer = setInterval(() => {
+    angle += 0.15;
+    // Sinusoidal variation simulating breathing & mild activity
+    const simulatedBpm = Math.round(78 + Math.sin(angle) * 14 + (Math.random() * 4 - 2));
+    const simulatedRr = Math.round(60000 / simulatedBpm + (Math.random() * 30 - 15));
+    processBleHeartRate(simulatedBpm, [simulatedRr]);
+  }, 1000);
+}
+
+function stopBleSimulation() {
+  bleState.simulating = false;
+  if (bleState.simTimer) clearInterval(bleState.simTimer);
+  bleState.simTimer = null;
+  const btnSimLabel = document.getElementById('btn-ble-sim-label');
+  if (btnSimLabel) btnSimLabel.textContent = '🧪 Test Simulator';
+  onBleDisconnected();
+}
+
+// Live Canvas ECG Trace Animation
+function initEcgCanvas() {
+  const canvas = document.getElementById('ble-ecg-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  let x = 0;
+  const points = [];
+  const maxPoints = canvas.width;
+
+  function renderEcg() {
+    const width = canvas.width;
+    const height = canvas.height;
+    const midY = height / 2;
+
+    // Advance phase scaled by current BPM
+    const currentBpm = bleState.liveBpm > 0 ? bleState.liveBpm : 65;
+    const beatFrequency = (currentBpm / 60) * 0.05;
+    bleState.ecgPhase += beatFrequency;
+
+    // P-Q-R-S-T synthesis
+    const cycle = bleState.ecgPhase % 1;
+    let y = midY;
+    if (cycle > 0.1 && cycle < 0.2) {
+      // P wave
+      y -= Math.sin((cycle - 0.1) * Math.PI * 10) * 8;
+    } else if (cycle >= 0.22 && cycle < 0.25) {
+      // Q wave dip
+      y += 8;
+    } else if (cycle >= 0.25 && cycle < 0.30) {
+      // R sharp high spike
+      y -= 38;
+    } else if (cycle >= 0.30 && cycle < 0.33) {
+      // S wave dip
+      y += 12;
+    } else if (cycle >= 0.40 && cycle < 0.55) {
+      // T wave
+      y -= Math.sin((cycle - 0.40) * Math.PI * (1 / 0.15)) * 14;
+    }
+
+    points.push(y + (Math.random() * 1.5 - 0.75));
+    if (points.length > width) points.shift();
+
+    // Draw grid background
+    ctx.fillStyle = '#080A0E';
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.strokeStyle = 'rgba(0, 240, 118, 0.07)';
+    ctx.lineWidth = 1;
+    for (let gx = 0; gx < width; gx += 25) {
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, height); ctx.stroke();
+    }
+    for (let gy = 0; gy < height; gy += 25) {
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(width, gy); ctx.stroke();
+    }
+
+    // Draw Waveform line
+    ctx.strokeStyle = bleState.liveBpm >= 140 ? '#FF4757' : (bleState.liveBpm >= 110 ? '#00E5FF' : '#00F076');
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 8;
+
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0) ctx.moveTo(i, points[i]);
+      else ctx.lineTo(i, points[i]);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Glowing Lead Point
+    if (points.length > 0) {
+      const lastX = points.length - 1;
+      const lastY = points[lastX];
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(lastX, lastY, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    bleState.ecgAnimId = requestAnimationFrame(renderEcg);
+  }
+
+  renderEcg();
+}
+
+// Offline Session Recording & Export
+function toggleBleRecording() {
+  if (bleState.recording) {
+    // Stop recording
+    bleState.recording = false;
+    clearInterval(bleState.recordTimer);
+    bleState.recordTimer = null;
+
+    const btnRecord = document.getElementById('btn-ble-record');
+    const btnLabel = document.getElementById('btn-ble-record-label');
+    const btnExportCsv = document.getElementById('btn-ble-export-csv');
+    const btnExportJson = document.getElementById('btn-ble-export-json');
+
+    if (btnRecord) btnRecord.classList.remove('recording');
+    if (btnLabel) btnLabel.textContent = 'Start Offline Recording';
+    if (btnExportCsv) btnExportCsv.disabled = bleState.recordSamples.length === 0;
+    if (btnExportJson) btnExportJson.disabled = bleState.recordSamples.length === 0;
+
+    // Auto-sync recorded session to server database
+    if (bleState.recordSamples.length > 0) {
+      const durationSec = Math.round((Date.now() - bleState.recordStartTime) / 1000);
+      const bpms = bleState.recordSamples.map(s => s.bpm);
+      const avgHr = Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length);
+      const maxHr = Math.max(...bpms);
+      const minHr = Math.min(...bpms);
+
+      const sessionPayload = {
+        device_name: (bleState.device && bleState.device.name) || 'WHOOP BLE Strap',
+        duration_seconds: durationSec,
+        avg_hr: avgHr,
+        max_hr: maxHr,
+        min_hr: minHr,
+        hrv_rmssd: bleState.liveRmssd,
+        trimp_effort: bleState.trimpScore,
+        samples_count: bleState.recordSamples.length,
+        date: localDateString()
+      };
+
+      fetch('/api/workouts/ble-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sessionPayload)
+      }).catch(e => console.warn('Offline session server sync deferred:', e.message));
+    }
+  } else {
+    // Start recording
+    bleState.recording = true;
+    bleState.recordStartTime = Date.now();
+    bleState.recordSamples = [];
+
+    const btnRecord = document.getElementById('btn-ble-record');
+    const btnLabel = document.getElementById('btn-ble-record-label');
+    const btnExportCsv = document.getElementById('btn-ble-export-csv');
+    const btnExportJson = document.getElementById('btn-ble-export-json');
+
+    if (btnRecord) btnRecord.classList.add('recording');
+    if (btnLabel) btnLabel.textContent = '⏹ Stop & Save Session';
+    if (btnExportCsv) btnExportCsv.disabled = true;
+    if (btnExportJson) btnExportJson.disabled = true;
+
+    bleState.recordTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - bleState.recordStartTime) / 1000);
+      const h = String(Math.floor(elapsed / 3600)).padStart(2, '0');
+      const m = String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0');
+      const s = String(elapsed % 60).padStart(2, '0');
+      const timerEl = document.getElementById('ble-record-timer');
+      if (timerEl) timerEl.textContent = `${h}:${m}:${s}`;
+    }, 1000);
+  }
+}
+
+function exportBleRecordingCsv() {
+  if (!bleState.recordSamples.length) return;
+  let csv = 'Timestamp,HeartRate_BPM,HRV_RMSSD_ms,Zone,TRIMP_Effort\n';
+  bleState.recordSamples.forEach(s => {
+    csv += `${s.timestamp},${s.bpm},${s.rmssd || 0},${s.zone},${s.trimp}\n`;
+  });
+  downloadBlob(csv, `whoop_ble_session_${localDateString()}.csv`, 'text/csv');
+}
+
+function exportBleRecordingJson() {
+  if (!bleState.recordSamples.length) return;
+  const json = JSON.stringify(bleState.recordSamples, null, 2);
+  downloadBlob(json, `whoop_ble_session_${localDateString()}.json`, 'application/json');
+}
+
+function downloadBlob(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ===========================================================================
+// SMART REP COUNTER & KINEMATICS STUDIO
+// ===========================================================================
+
+const EXERCISES_CONFIG = {
+  pushups: {
+    title: 'Push-ups (Standard)',
+    primaryMuscle: 'Pectoralis Major & Triceps',
+    secondaryMuscle: 'Anterior Deltoids, Core',
+    guidance: 'Place phone on floor under chest (face-up) or in arm-band.',
+    targetReps: 15,
+    valleyThreshold: 7.2,
+    peakThreshold: 12.8,
+    minDurationMs: 750
+  },
+  squats: {
+    title: 'Bodyweight / Goblet Squats',
+    primaryMuscle: 'Quadriceps & Gluteus Maximus',
+    secondaryMuscle: 'Hamstrings, Calves, Core',
+    guidance: 'Place phone in front pocket or hold against chest with both hands.',
+    targetReps: 15,
+    valleyThreshold: 6.8,
+    peakThreshold: 13.5,
+    minDurationMs: 950
+  },
+  pullups: {
+    title: 'Pull-ups / Chin-ups',
+    primaryMuscle: 'Latissimus Dorsi & Biceps',
+    secondaryMuscle: 'Rhomboids, Trapezius, Forearms',
+    guidance: 'Clip phone to waistband or use AI Camera Vision mode.',
+    targetReps: 10,
+    valleyThreshold: 7.0,
+    peakThreshold: 13.0,
+    minDurationMs: 900
+  },
+  bicep_curls: {
+    title: 'Bicep Curls',
+    primaryMuscle: 'Biceps Brachii & Brachialis',
+    secondaryMuscle: 'Brachioradialis, Forearms',
+    guidance: 'Fasten phone to wrist / dumbbell or hold in moving hand.',
+    targetReps: 12,
+    valleyThreshold: 7.4,
+    peakThreshold: 12.6,
+    minDurationMs: 800
+  },
+  bench_press: {
+    title: 'Dumbbell / Barbell Bench Press',
+    primaryMuscle: 'Pectoralis Major & Triceps',
+    secondaryMuscle: 'Anterior Deltoids',
+    guidance: 'Mount phone on dumbbell / barbell or hold in hand.',
+    targetReps: 10,
+    valleyThreshold: 7.0,
+    peakThreshold: 13.2,
+    minDurationMs: 850
+  },
+  shoulder_press: {
+    title: 'Overhead Shoulder Press',
+    primaryMuscle: 'Deltoids & Trapezius',
+    secondaryMuscle: 'Triceps, Upper Chest',
+    guidance: 'Hold in hand or switch to AI Camera Vision mode.',
+    targetReps: 10,
+    valleyThreshold: 7.0,
+    peakThreshold: 13.2,
+    minDurationMs: 850
+  },
+  dips: {
+    title: 'Tricep & Chest Dips',
+    primaryMuscle: 'Triceps & Lower Chest',
+    secondaryMuscle: 'Anterior Deltoids',
+    guidance: 'Place phone in pocket or waist-pouch.',
+    targetReps: 12,
+    valleyThreshold: 7.0,
+    peakThreshold: 13.0,
+    minDurationMs: 800
+  },
+  lunges: {
+    title: 'Walking & Static Lunges',
+    primaryMuscle: 'Quadriceps & Gluteus Maximus',
+    secondaryMuscle: 'Hamstrings, Calves',
+    guidance: 'Place phone in pocket of leading leg.',
+    targetReps: 12,
+    valleyThreshold: 6.8,
+    peakThreshold: 13.2,
+    minDurationMs: 950
+  },
+  crunches: {
+    title: 'Abdominal Crunches',
+    primaryMuscle: 'Rectus Abdominis & Core',
+    secondaryMuscle: 'Obliques',
+    guidance: 'Hold phone flat against upper chest while crunching.',
+    targetReps: 20,
+    valleyThreshold: 7.2,
+    peakThreshold: 12.8,
+    minDurationMs: 700
+  },
+  jumping_jacks: {
+    title: 'Jumping Jacks / Cardio Pacing',
+    primaryMuscle: 'Full-Body Cardiovascular',
+    secondaryMuscle: 'Calves, Deltoids, Core',
+    guidance: 'Hold phone in hand or place in front pocket.',
+    targetReps: 30,
+    valleyThreshold: 5.5,
+    peakThreshold: 15.0,
+    minDurationMs: 400
+  }
+};
+
+let repState = {
+  currentExKey: 'pushups',
+  mode: 'motion', // 'motion' | 'vision' | 'manual'
+  repCount: 0,
+  currentSet: 1,
+  targetReps: 12,
+  weightKg: 0,
+  phase: 'ready', // 'ready' | 'eccentric' | 'inflection' | 'concentric'
+  lastRepTime: 0,
+  phaseStartTime: 0,
+  repTimings: [],
+  smoothedMagnitude: 9.8,
+  sensorHistory: [],
+  sensorActive: false,
+  cameraActive: false,
+  cameraStream: null,
+  cameraAnimId: null,
+  restDuration: 60,
+  restRemaining: 60,
+  restTimer: null,
+  totalReps: 0,
+  totalSets: 0,
+  totalVolumeKg: 0,
+  audioCtx: null,
+  facingMode: 'user'
+};
+
+function initRepCounterStudio() {
+  // Exercise Pill Switcher
+  const pills = document.querySelectorAll('.ex-pill');
+  pills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      pills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      selectExercise(pill.dataset.ex);
+    });
+  });
+
+  // Mode Switcher
+  const modePills = document.querySelectorAll('.rep-mode-pill');
+  modePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      modePills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      setRepDetectionMode(pill.dataset.mode);
+    });
+  });
+
+  // Controls
+  const btnSetDec = document.getElementById('btn-set-dec');
+  const btnSetInc = document.getElementById('btn-set-inc');
+  const targetInput = document.getElementById('rep-target-input');
+  const weightInput = document.getElementById('rep-weight-input');
+  const btnResetCount = document.getElementById('btn-rep-reset-count');
+  const btnCompleteSet = document.getElementById('btn-rep-complete-set');
+  const btnRestSkip = document.getElementById('btn-rest-skip');
+  const btnSyncHypertrophy = document.getElementById('btn-rep-sync-hypertrophy');
+  const btnActivateMotion = document.getElementById('btn-activate-motion');
+  const btnToggleCamera = document.getElementById('btn-toggle-camera');
+  const btnSwitchCamera = document.getElementById('btn-switch-camera');
+  const tapZone = document.getElementById('rep-tap-zone');
+
+  if (btnSetDec) btnSetDec.addEventListener('click', () => adjustSetNumber(-1));
+  if (btnSetInc) btnSetInc.addEventListener('click', () => adjustSetNumber(1));
+  if (targetInput) targetInput.addEventListener('change', (e) => {
+    repState.targetReps = Math.max(1, parseInt(e.target.value, 10) || 12);
+    updateRepDial();
+  });
+  if (weightInput) weightInput.addEventListener('change', (e) => {
+    repState.weightKg = Math.max(0, parseFloat(e.target.value) || 0);
+  });
+  if (btnResetCount) btnResetCount.addEventListener('click', resetCurrentSetCount);
+  if (btnCompleteSet) btnCompleteSet.addEventListener('click', completeCurrentSet);
+  if (btnRestSkip) btnRestSkip.addEventListener('click', skipRestTimer);
+  if (btnSyncHypertrophy) btnSyncHypertrophy.addEventListener('click', syncWorkoutToHypertrophy);
+  if (btnActivateMotion) btnActivateMotion.addEventListener('click', toggleMotionSensor);
+  if (btnToggleCamera) btnToggleCamera.addEventListener('click', toggleCameraVision);
+  if (btnSwitchCamera) btnSwitchCamera.addEventListener('click', switchCameraFacing);
+
+  // Manual Tap Pad & Spacebar
+  if (tapZone) tapZone.addEventListener('click', recordManualRep);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' && repState.mode === 'manual') {
+      const activePane = document.querySelector('.tab-pane.active');
+      if (activePane && activePane.id === 'pane-replab') {
+        e.preventDefault();
+        recordManualRep();
+      }
+    }
+  });
+
+  // Rest Timer Presets
+  const restPills = document.querySelectorAll('.rest-pill');
+  restPills.forEach(rp => {
+    rp.addEventListener('click', () => {
+      restPills.forEach(p => p.classList.remove('active'));
+      rp.classList.add('active');
+      repState.restDuration = parseInt(rp.dataset.rest, 10) || 60;
+      repState.restRemaining = repState.restDuration;
+      updateRestClockDisplay();
+    });
+  });
+
+  selectExercise('pushups');
+  initSensorCanvas();
+  loadRecentRepWorkouts();
+}
+
+function selectExercise(key) {
+  const cfg = EXERCISES_CONFIG[key] || EXERCISES_CONFIG.pushups;
+  repState.currentExKey = key;
+  repState.targetReps = cfg.targetReps;
+
+  const titleEl = document.getElementById('rep-ex-title');
+  const primEl = document.getElementById('rep-primary-muscle');
+  const secEl = document.getElementById('rep-secondary-muscle');
+  const guideEl = document.getElementById('rep-sensor-guidance');
+  const targetInput = document.getElementById('rep-target-input');
+  const rollupMuscle = document.getElementById('rollup-muscle-tag');
+
+  if (titleEl) titleEl.textContent = cfg.title;
+  if (primEl) primEl.textContent = cfg.primaryMuscle;
+  if (secEl) secEl.textContent = cfg.secondaryMuscle;
+  if (guideEl) guideEl.textContent = cfg.guidance;
+  if (targetInput) targetInput.value = cfg.targetReps;
+  if (rollupMuscle) rollupMuscle.textContent = cfg.primaryMuscle;
+
+  resetCurrentSetCount();
+}
+
+function setRepDetectionMode(mode) {
+  repState.mode = mode;
+  document.getElementById('viewport-motion')?.classList.toggle('hidden', mode !== 'motion');
+  document.getElementById('viewport-vision')?.classList.toggle('hidden', mode !== 'vision');
+  document.getElementById('viewport-manual')?.classList.toggle('hidden', mode !== 'manual');
+
+  if (mode === 'vision' && !repState.cameraActive) {
+    toggleCameraVision();
+  } else if (mode !== 'vision' && repState.cameraActive) {
+    toggleCameraVision();
+  }
+}
+
+// -------------------------------------------------------------
+// Mode A: Accelerometer Sensor Processing
+// -------------------------------------------------------------
+async function toggleMotionSensor() {
+  if (repState.sensorActive) {
+    window.removeEventListener('devicemotion', handleDeviceMotion);
+    repState.sensorActive = false;
+    const btn = document.getElementById('btn-activate-motion');
+    if (btn) btn.innerHTML = '<span>📲 Start Motion Accelerometer</span>';
+    return;
+  }
+
+  // iOS 13+ permission request
+  if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+    try {
+      const permission = await DeviceMotionEvent.requestPermission();
+      if (permission !== 'granted') {
+        alert('Motion sensor permission was denied.');
+        return;
+      }
+    } catch (e) {
+      console.warn('DeviceMotionEvent permission error:', e);
+    }
+  }
+
+  window.addEventListener('devicemotion', handleDeviceMotion, { passive: true });
+  repState.sensorActive = true;
+  const btn = document.getElementById('btn-activate-motion');
+  if (btn) btn.innerHTML = '<span>⏹ Stop Motion Sensor</span>';
+}
+
+function handleDeviceMotion(event) {
+  const acc = event.accelerationIncludingGravity || event.acceleration;
+  if (!acc) return;
+
+  const ax = acc.x || 0;
+  const ay = acc.y || 0;
+  const az = acc.z || 0;
+  const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+
+  // Exponential moving average filter
+  repState.smoothedMagnitude = 0.3 * mag + 0.7 * repState.smoothedMagnitude;
+  const currentVal = repState.smoothedMagnitude;
+
+  // Append to oscilloscope history
+  repState.sensorHistory.push(currentVal);
+  if (repState.sensorHistory.length > 200) repState.sensorHistory.shift();
+
+  const cfg = EXERCISES_CONFIG[repState.currentExKey] || EXERCISES_CONFIG.pushups;
+  const now = Date.now();
+
+  // State Machine for Rep Detection
+  // READY -> ECCENTRIC (drop below valley) -> INFLECTION -> CONCENTRIC (spike above peak) -> REP_RECORDED
+  if (repState.phase === 'ready' || repState.phase === 'concentric') {
+    if (currentVal < cfg.valleyThreshold) {
+      repState.phase = 'eccentric';
+      repState.phaseStartTime = now;
+      updatePhaseBadge('DOWN (ECCENTRIC)', 'badge-eccentric');
+    }
+  } else if (repState.phase === 'eccentric') {
+    if (currentVal < cfg.valleyThreshold - 1.0) {
+      repState.phase = 'inflection';
+      updatePhaseBadge('BOTTOM REACHED', 'badge-inflection');
+    }
+  } else if (repState.phase === 'inflection') {
+    if (currentVal > cfg.peakThreshold) {
+      repState.phase = 'concentric';
+      updatePhaseBadge('UP (CONCENTRIC)', 'badge-concentric');
+
+      // Check min duration lockout to avoid duplicate counts
+      const elapsed = now - repState.lastRepTime;
+      if (elapsed >= cfg.minDurationMs) {
+        repState.lastRepTime = now;
+        const repDuration = (now - repState.phaseStartTime) / 1000;
+        onRepRecorded(repDuration);
+      }
+    }
+  } else if (repState.phase === 'concentric') {
+    if (Math.abs(currentVal - 9.8) < 1.5) {
+      repState.phase = 'ready';
+      updatePhaseBadge('READY', 'badge-ready');
+    }
+  }
+}
+
+function initSensorCanvas() {
+  const canvas = document.getElementById('rep-sensor-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function renderSensorScope() {
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.fillStyle = '#06080B';
+    ctx.fillRect(0, 0, w, h);
+
+    // Draw baseline (9.8 m/s^2) and threshold lines
+    const midY = h / 2;
+    const scale = h / 28; // 0 to 28 m/s^2
+
+    const cfg = EXERCISES_CONFIG[repState.currentExKey] || EXERCISES_CONFIG.pushups;
+    const peakY = h - (cfg.peakThreshold * scale);
+    const valleyY = h - (cfg.valleyThreshold * scale);
+    const baseY = h - (9.8 * scale);
+
+    // Threshold lines
+    ctx.strokeStyle = 'rgba(0, 240, 118, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(0, peakY); ctx.lineTo(w, peakY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.2)';
+    ctx.beginPath(); ctx.moveTo(0, valleyY); ctx.lineTo(w, valleyY); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.beginPath(); ctx.moveTo(0, baseY); ctx.lineTo(w, baseY); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Draw magnitude wave
+    if (repState.sensorHistory.length > 1) {
+      ctx.strokeStyle = repState.phase === 'concentric' ? '#00F076' : (repState.phase === 'eccentric' ? '#00E5FF' : '#9CA3AF');
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      for (let i = 0; i < repState.sensorHistory.length; i++) {
+        const x = (i / 200) * w;
+        const val = repState.sensorHistory[i];
+        const y = h - (val * scale);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    requestAnimationFrame(renderSensorScope);
+  }
+
+  renderSensorScope();
+}
+
+// -------------------------------------------------------------
+// Mode B: AI Camera Vision Optical Flow
+// -------------------------------------------------------------
+async function toggleCameraVision() {
+  const video = document.getElementById('rep-camera-video');
+  const canvas = document.getElementById('rep-camera-canvas');
+  const btn = document.getElementById('btn-toggle-camera');
+  const statusTag = document.getElementById('camera-status-tag');
+
+  if (repState.cameraActive) {
+    if (repState.cameraStream) {
+      repState.cameraStream.getTracks().forEach(t => t.stop());
+      repState.cameraStream = null;
+    }
+    if (repState.cameraAnimId) cancelAnimationFrame(repState.cameraAnimId);
+    repState.cameraActive = false;
+    if (btn) btn.innerHTML = '<span>📹 Start Camera Tracker</span>';
+    if (statusTag) { statusTag.textContent = 'STANDBY'; statusTag.style.color = '#9CA3AF'; }
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: repState.facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    repState.cameraStream = stream;
+    video.srcObject = stream;
+    await video.play();
+    repState.cameraActive = true;
+
+    if (btn) btn.innerHTML = '<span>⏹ Stop Camera</span>';
+    if (statusTag) { statusTag.textContent = 'TRACKING LIVE'; statusTag.style.color = '#00F076'; }
+
+    startCameraMotionLoop(video, canvas);
+  } catch (err) {
+    console.error('Camera access error:', err);
+    alert('Unable to access camera. Please allow camera permissions or use the Motion Sensor mode.');
+  }
+}
+
+function switchCameraFacing() {
+  repState.facingMode = repState.facingMode === 'user' ? 'environment' : 'user';
+  if (repState.cameraActive) {
+    toggleCameraVision().then(() => toggleCameraVision());
+  }
+}
+
+function startCameraMotionLoop(video, canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const w = 80, h = 60;
+  const offscreen = document.createElement('canvas');
+  offscreen.width = w; offscreen.height = h;
+  const offCtx = offscreen.getContext('2d', { willReadFrequently: true });
+
+  let prevFrame = null;
+  let prevCentroidY = h / 2;
+  let motionDir = 0; // -1 down, 1 up
+
+  function processFrame() {
+    if (!repState.cameraActive || video.paused || video.ended) return;
+
+    offCtx.drawImage(video, 0, 0, w, h);
+    const imgData = offCtx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+
+    if (prevFrame) {
+      let sumY = 0, motionPixelCount = 0;
+      // Central region of interest (exclude edges)
+      for (let y = 10; y < h - 10; y++) {
+        for (let x = 15; x < w - 15; x++) {
+          const idx = (y * w + x) * 4;
+          const diff = Math.abs(data[idx] - prevFrame[idx]) +
+                       Math.abs(data[idx + 1] - prevFrame[idx + 1]) +
+                       Math.abs(data[idx + 2] - prevFrame[idx + 2]);
+          if (diff > 50) {
+            sumY += y;
+            motionPixelCount++;
+          }
+        }
+      }
+
+      // Clear HUD overlay canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (motionPixelCount > 40) {
+        const centroidY = sumY / motionPixelCount;
+        const deltaY = centroidY - prevCentroidY;
+        const now = Date.now();
+        const cfg = EXERCISES_CONFIG[repState.currentExKey] || EXERCISES_CONFIG.pushups;
+
+        if (deltaY > 1.2) {
+          // Centroid moving downwards in frame (eccentric descent)
+          motionDir = -1;
+          repState.phase = 'eccentric';
+          updatePhaseBadge('DOWN (ECCENTRIC)', 'badge-eccentric');
+        } else if (deltaY < -1.4 && motionDir === -1) {
+          // Centroid moving upwards in frame (concentric push)
+          motionDir = 1;
+          repState.phase = 'concentric';
+          updatePhaseBadge('UP (CONCENTRIC)', 'badge-concentric');
+
+          if (now - repState.lastRepTime >= cfg.minDurationMs) {
+            repState.lastRepTime = now;
+            onRepRecorded(1.5);
+          }
+        }
+        prevCentroidY = centroidY;
+
+        // Draw Motion Flow indicator line on HUD
+        const hudY = (centroidY / h) * canvas.height;
+        ctx.strokeStyle = '#00F076';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width * 0.25, hudY);
+        ctx.lineTo(canvas.width * 0.75, hudY);
+        ctx.stroke();
+      }
+    }
+
+    prevFrame = new Uint8Array(data);
+    repState.cameraAnimId = requestAnimationFrame(processFrame);
+  }
+
+  processFrame();
+}
+
+// -------------------------------------------------------------
+// Mode C: Manual Tap Pacer
+// -------------------------------------------------------------
+function recordManualRep() {
+  onRepRecorded(1.5);
+}
+
+// Rep Completion Action Handler
+function onRepRecorded(durationSec = 1.5) {
+  repState.repCount++;
+  repState.totalReps++;
+
+  // Tempo calculation
+  const tempoDown = Math.max(0.8, Math.round((durationSec * 0.6) * 10) / 10);
+  const tempoUp = Math.max(0.6, Math.round((durationSec * 0.4) * 10) / 10);
+  const tempoEl = document.getElementById('rep-tempo-display');
+  if (tempoEl) tempoEl.textContent = `${tempoDown}s eccentric • ${tempoUp}s concentric`;
+
+  // Audio chime
+  const soundToggle = document.getElementById('rep-sound-toggle');
+  if (soundToggle && soundToggle.checked) playAudioRepChime();
+
+  // Haptic pulse
+  const hapticToggle = document.getElementById('rep-haptic-toggle');
+  if (hapticToggle && hapticToggle.checked) triggerVibration([60]);
+
+  updateRepDial();
+
+  // If target reached, trigger set complete celebration
+  if (repState.repCount === repState.targetReps) {
+    if (soundToggle && soundToggle.checked) playAudioSetChime();
+    if (hapticToggle && hapticToggle.checked) triggerVibration([100, 60, 100, 60, 200]);
+  }
+}
+
+function updateRepDial() {
+  const numEl = document.getElementById('rep-count-display');
+  const circle = document.getElementById('rep-dial-circle');
+  if (numEl) numEl.textContent = repState.repCount;
+
+  if (circle) {
+    const circumference = 534; // 2 * PI * 85
+    const fraction = Math.min(1, repState.repCount / repState.targetReps);
+    const offset = circumference - (fraction * circumference);
+    circle.style.strokeDashoffset = offset;
+  }
+
+  const rollupTotalReps = document.getElementById('rollup-total-reps');
+  if (rollupTotalReps) rollupTotalReps.textContent = repState.totalReps;
+}
+
+function updatePhaseBadge(text, className) {
+  const badge = document.getElementById('rep-phase-badge');
+  if (badge) {
+    badge.textContent = text;
+    badge.className = `rep-phase-badge ${className}`;
+  }
+}
+
+function resetCurrentSetCount() {
+  repState.repCount = 0;
+  repState.phase = 'ready';
+  updatePhaseBadge('READY', 'badge-ready');
+  updateRepDial();
+}
+
+function adjustSetNumber(delta) {
+  repState.currentSet = Math.max(1, repState.currentSet + delta);
+  const setEl = document.getElementById('rep-current-set');
+  if (setEl) setEl.textContent = repState.currentSet;
+}
+
+function completeCurrentSet() {
+  if (repState.repCount === 0) return;
+
+  repState.totalSets++;
+  const weight = repState.weightKg > 0 ? repState.weightKg : 25; // default bodyweight fraction
+  const setVol = repState.repCount * weight;
+  repState.totalVolumeKg += setVol;
+
+  const rollupSets = document.getElementById('rollup-total-sets');
+  const rollupVol = document.getElementById('rollup-total-volume');
+  if (rollupSets) rollupSets.textContent = repState.totalSets;
+  if (rollupVol) rollupVol.textContent = `${Math.round(repState.totalVolumeKg)} kg`;
+
+  // Audio & Haptic celebration
+  playAudioSetChime();
+  triggerVibration([120, 60, 120, 60, 250]);
+
+  // Start Rest Interval Timer
+  startRestTimer();
+
+  // Advance Set Number
+  adjustSetNumber(1);
+  resetCurrentSetCount();
+}
+
+// Rest Timer
+function startRestTimer() {
+  clearInterval(repState.restTimer);
+  repState.restRemaining = repState.restDuration;
+  updateRestClockDisplay();
+
+  repState.restTimer = setInterval(() => {
+    repState.restRemaining--;
+    updateRestClockDisplay();
+
+    // 3, 2, 1 audible countdown ticks
+    if (repState.restRemaining <= 3 && repState.restRemaining > 0) {
+      playAudioCountdownTick();
+    }
+
+    if (repState.restRemaining <= 0) {
+      clearInterval(repState.restTimer);
+      repState.restTimer = null;
+      playAudioSetChime();
+      triggerVibration([200, 100, 200]);
+    }
+  }, 1000);
+}
+
+function skipRestTimer() {
+  clearInterval(repState.restTimer);
+  repState.restTimer = null;
+  repState.restRemaining = 0;
+  updateRestClockDisplay();
+}
+
+function updateRestClockDisplay() {
+  const clock = document.getElementById('rep-rest-clock');
+  const fill = document.getElementById('rep-rest-fill');
+  const m = String(Math.floor(repState.restRemaining / 60)).padStart(2, '0');
+  const s = String(repState.restRemaining % 60).padStart(2, '0');
+  if (clock) clock.textContent = `${m}:${s}`;
+  if (fill) {
+    const pct = Math.max(0, (repState.restRemaining / repState.restDuration) * 100);
+    fill.style.width = `${pct}%`;
+  }
+}
+
+// Web Audio API Synthesizer
+function getAudioContext() {
+  if (!repState.audioCtx) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (AudioContext) repState.audioCtx = new AudioContext();
+  }
+  if (repState.audioCtx && repState.audioCtx.state === 'suspended') {
+    repState.audioCtx.resume();
+  }
+  return repState.audioCtx;
+}
+
+function playAudioRepChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 crystal bell
+    osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.18);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.18);
+  } catch (e) {}
+}
+
+function playAudioSetChime() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    [523.25, 659.25, 783.99].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + (idx * 0.08));
+      gain.gain.setValueAtTime(0.25, ctx.currentTime + (idx * 0.08));
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (idx * 0.08) + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + (idx * 0.08));
+      osc.stop(ctx.currentTime + (idx * 0.08) + 0.35);
+    });
+  } catch (e) {}
+}
+
+function playAudioCountdownTick() {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch (e) {}
+}
+
+function triggerVibration(pattern) {
+  if (navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+}
+
+// Sync to Hypertrophy Lab & Save Session
+async function syncWorkoutToHypertrophy() {
+  if (repState.totalReps === 0) {
+    alert('Log at least one set before syncing.');
+    return;
+  }
+
+  const cfg = EXERCISES_CONFIG[repState.currentExKey] || EXERCISES_CONFIG.pushups;
+  const payload = {
+    exercise: repState.currentExKey,
+    exercise_name: cfg.title,
+    sets: repState.totalSets,
+    reps: repState.totalReps,
+    weight_kg: repState.weightKg,
+    primary_muscle: cfg.primaryMuscle,
+    secondary_muscles: cfg.secondaryMuscle,
+    volume_kg: repState.totalVolumeKg,
+    date: localDateString()
+  };
+
+  try {
+    const res = await fetch('/api/workouts/rep-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert(`Workout successfully saved!\n\n${cfg.title}: ${repState.totalSets} sets, ${repState.totalReps} total reps.\nSynced to Hypertrophy Lab.`);
+      loadRecentRepWorkouts();
+      // Reload hypertrophy lab data
+      if (typeof loadHypertrophyData === 'function') loadHypertrophyData();
+    }
+  } catch (err) {
+    console.error('Error syncing rep workout:', err);
+  }
+}
+
+async function loadRecentRepWorkouts() {
+  try {
+    const res = await fetch('/api/workouts/rep-sessions?limit=10');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.getElementById('rep-history-tbody');
+    if (!tbody || !data.sessions || !data.sessions.length) return;
+
+    tbody.innerHTML = data.sessions.map(s => `
+      <tr>
+        <td style="color:var(--text-secondary);font-size:11px;">${(s.timestamp || s.date || '').slice(0, 16).replace('T', ' ')}</td>
+        <td style="font-weight:700;">${s.exercise_name || s.exercise}</td>
+        <td><span style="color:#00F076;font-weight:700;">${s.sets} sets</span> &times; ${s.reps} reps</td>
+        <td>${s.weight_kg > 0 ? s.weight_kg + ' kg' : 'Bodyweight'}</td>
+        <td><span class="ex-meta-badge">${s.primary_muscle || 'Full Body'}</span></td>
+        <td style="color:#FBBF24;">+${Math.round((s.reps || 10) * 0.15 * 10) / 10} TRIMP</td>
+      </tr>
+    `).join('');
+  } catch (e) {}
+}
+

@@ -555,6 +555,56 @@ app.get('/api/insights', (req, res) => {
 });
 
 // -------------------------------------------------------------
+// Smart Rep Counter & Offline BLE Session Endpoints
+// -------------------------------------------------------------
+
+// Log a smart rep session
+app.post('/api/workouts/rep-session', (req, res) => {
+  try {
+    const workout = req.body || {};
+    if (!workout.exercise && !workout.exercise_name) {
+      return res.status(400).json({ error: 'Exercise name is required' });
+    }
+    const session = db.saveRepWorkout(workout);
+    res.json({ success: true, session });
+  } catch (err) {
+    console.error('Error saving rep workout session:', err);
+    res.status(500).json({ error: 'Failed to save rep workout', details: err.message });
+  }
+});
+
+// Get recent rep workout sessions
+app.get('/api/workouts/rep-sessions', (req, res) => {
+  try {
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    res.json({ sessions: db.getRepWorkouts(limit) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve rep workouts', details: err.message });
+  }
+});
+
+// Save an offline BLE recording session
+app.post('/api/workouts/ble-session', (req, res) => {
+  try {
+    const session = db.saveBleSession(req.body || {});
+    res.json({ success: true, session });
+  } catch (err) {
+    console.error('Error saving BLE session:', err);
+    res.status(500).json({ error: 'Failed to save BLE session', details: err.message });
+  }
+});
+
+// Get recorded offline BLE sessions
+app.get('/api/workouts/ble-sessions', (req, res) => {
+  try {
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 30));
+    res.json({ sessions: db.getBleSessions(limit) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to retrieve BLE sessions', details: err.message });
+  }
+});
+
+// -------------------------------------------------------------
 // Demo / Mock Data Endpoints
 // -------------------------------------------------------------
 
